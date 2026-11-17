@@ -1,0 +1,35 @@
+{
+  "name": "@loam/cli",
+  "version": "0.1.0",
+  "description": "loam: single-user project memory shared across devices and agent harnesses",
+  "license": "Apache-2.0",
+  "type": "module",
+  "bin": {
+    "loam": "dist/bin.js"
+  },
+  "files": [
+    "dist",
+    "skills"
+  ],
+  "engines": {
+    "node": ">=22.6"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "node --experimental-strip-types --test test/node/blocks.test.ts test/node/format.test.ts test/node/outbox.test.ts test/node/project.test.ts test/node/install.test.ts test/node/client.test.ts",
+    "prepack": "pnpm build"
+  },
+  "dependencies": {
+    "@clack/prompts": "^0.9.0",
+    "commander": "^12.1.0",
+    "picocolors": "^1.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "^5.7.0"
+  }
+}
