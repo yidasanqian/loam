@@ -1,0 +1,11 @@
+node_modules/
+dist/
+dist-artifacts/
+.wrangler/
+.dev.vars
+.secrets/
+*.tgz
+*.local
+coverage/
+.DS_Store
+*.tmp

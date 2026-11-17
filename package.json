@@ -1,0 +1,17 @@
+{
+  "name": "loam",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Single-user, multi-device, multi-harness project memory.",
+  "license": "Apache-2.0",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "pnpm -r build",
+    "test": "pnpm -r test",
+    "typecheck": "pnpm -r typecheck",
+    "check:licenses": "node scripts/check-licenses.mjs",
+    "check": "pnpm typecheck && pnpm test && pnpm check:licenses"
+  }
+}
