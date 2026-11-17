@@ -82,6 +82,7 @@ simple = { limit = 60, period = 60 }
 
 - `proxy` 可选；设置后 CLI 自动以 `--use-env-proxy` 重执行，适配直连 workers.dev 超时的网络。
 - 环境变量覆盖：`LOAM_SERVER`、`LOAM_TOKEN`、`LOAM_DEVICE_ID`、`LOAM_DEVICE_NAME`、`LOAM_PROXY`、`LOAMRC`。
+- 管理页把同一 token 存在浏览器 localStorage，只发往同源 `/v1/*`；CSP `default-src 'self'` + 全量 `textContent` 渲染，避免 token 进入 URL 或第三方请求。
 - 权限：POSIX 写 0600；Windows 依赖用户目录 ACL。Keychain / DPAPI 不在 v1。
 - 可选：Cloudflare Access + Service Token 保护 `/v1/activate`（免费 50 seats），设备侧仍用 bearer。
 

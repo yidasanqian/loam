@@ -5,6 +5,7 @@
 | 组件 | 位置 | 职责 |
 |---|---|---|
 | Worker API | `worker/src/index.ts` | Hono 路由、鉴权中间件、限流、错误映射 |
+| 管理页 | `worker/public/`（Workers Assets） | 单页 UI：token 门禁、筛选、增改删、导出、设备撤销 |
 | 核心逻辑 | `worker/src/facts.ts` / `devices.ts` / `validate.ts` / `auth.ts` / `rate.ts` | 纯函数 + SQL，不依赖 Hono，可脱离 workerd 测试 |
 | 存储 | `worker/schema.sql`（D1） | `devices`、`facts` 两表；软删除 |
 | CLI | `cli/src/` | 命令、配置、outbox、缓存、输出裁剪、installer |
@@ -37,6 +38,12 @@ CLI: URLSearchParams(project|all, kind, tag, q, limit≤5, cursor)
   ← { facts[], next }
 失败且允许缓存 ⇒ 读 ~/.loam/cache/search-*.json，stderr 标注离线
 ```
+
+## 管理页
+
+`GET /` 由 Workers Assets 直接返回 `worker/public/index.html`，与 API 同源；token 存浏览器 localStorage。
+新增端点：`GET /v1/projects`（按 project 聚合计数）、`PATCH /v1/facts/:id`（改 text/kind/tags、重算 hash、冲突 409）。
+CSP 由 `public/_headers` 下发（`default-src 'self'`，无 inline script/style），前端全部用 `textContent` 渲染用户内容。
 
 ## 存储
 

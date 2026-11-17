@@ -86,6 +86,16 @@ loam uninstall            # 按 install.json 精确回滚
 
 完整参数、退出码与环境变量见 [docs/CLI.md](docs/CLI.md)。
 
+## 记忆管理页
+
+部署后打开 `https://loam.sanqian.workers.dev/`，粘贴 `~/.loamrc.json` 里的 token：
+
+- 项目 / 类型 / 标签筛选，多词 AND 搜索
+- 直接记录、修订、软删除，一键导出 NDJSON
+- 设备列表与撤销（撤销当前设备会立即退出登录）
+
+页面由 Workers Assets 托管（`worker/public/`），同源调用 `/v1/*`；token 只存当前浏览器的 localStorage，CSP 禁止内联脚本与外部资源。
+
 ## 开发与验证
 
 ```bash
@@ -109,6 +119,24 @@ pnpm check:licenses              # 许可证白名单
 | M5 CI / license 检查 / 发布 | CI（frozen lockfile）+ 许可证白名单 + `wrangler deploy --dry-run` 通过；发布待 npm token |
 
 验证命令与结果见下节；实测环境：Node 24.19、pnpm 11.28、wrangler 4.162、Windows 11。
+
+## GitHub CI/CD
+
+- `push` / PR → `ci`：typecheck、Worker HTTP、CLI、offline、许可证、`wrangler deploy --dry-run`
+- `push main`（`worker/**`）→ `deploy`：D1 schema → `wrangler deploy` → `/health` 冒烟；由仓库变量 `CF_DEPLOY=true` 开启
+- `tag v*` → `release`：全量测试 → `pnpm build` → `npm publish --provenance --access public`
+
+首次启用自动部署与发布（仓库 secrets 只设一次）：
+
+```bash
+gh variable set CF_DEPLOY --body true
+gh secret set CLOUDFLARE_ACCOUNT_ID --body "56cf8c921cb267fdae6d1f401bff12e2"
+gh secret set CLOUDFLARE_API_TOKEN      # Workers Scripts:Edit + D1:Edit
+gh secret set NPM_TOKEN                 # npm Automation token
+git tag v0.1.0 && git push --tags
+```
+
+`deploy` 用 `concurrency` 串行；`release` 依赖 npm provenance（`id-token: write`）。
 
 ## 文档
 

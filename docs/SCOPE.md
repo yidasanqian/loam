@@ -15,6 +15,7 @@
 | 设备与鉴权 | per-device Bearer、scopes(read/write)、撤销、轮换、限流 |
 | 安装 | `loam install` 探测三端 → 标记块 + skill 文件 + 可选 hook；`doctor` / `uninstall` |
 | 运维 | `export` / `import` / `prune` / `devices` |
+| 记忆管理页 | 同源静态页（`worker/public/`）：token 门禁、项目/类型筛选、检索、记录、修订、删除、NDJSON 导出、设备撤销 |
 | 文档 | SCOPE / ARCHITECTURE / AUTH / CLI / INSTALL / DEPENDENCIES + 5 条 ADR |
 
 ## 量化边界（代码断言）
@@ -39,7 +40,7 @@
 | 多用户 / RBAC | 单人用不到 | 每设备一 token，独立撤销 |
 | 服务端 LLM 抽取 | 撞 10 ms CPU + 费用 | agent 自写摘要（ADR-0003） |
 | 图 / 时态图谱 / 实体消解 | 复杂度超需求 | 需要时迁 Hindsight |
-| Web UI | 非必要 | `loam list --json` |
+| Web UI | ~~非必要~~ → v0.1 追加：同源管理页，不做富文本/协作 | `worker/public/` + Bearer token（localStorage） |
 | 跨 project 全局语义搜索 | 混淆边界 | 按 project 隔离 + `--all` 显式跨库 |
 | 自动遗忘引擎 | 单人可控 | `loam prune --older 180d` |
 | 非 CF 后端 | 无第二实现 | v2 抽 Storage 接口 |
