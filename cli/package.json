@@ -3,6 +3,15 @@
   "version": "0.1.0",
   "description": "loam: single-user project memory shared across devices and agent harnesses",
   "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yidasanqian/loam.git",
+    "directory": "cli"
+  },
+  "homepage": "https://github.com/yidasanqian/loam#readme",
+  "bugs": {
+    "url": "https://github.com/yidasanqian/loam/issues"
+  },
   "type": "module",
   "bin": {
     "loam": "dist/bin.js"
