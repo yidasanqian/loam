@@ -15,8 +15,9 @@ const state = {
   q: '',
   facts: [],
   cursor: null,
-  loading: false,
 };
+
+let loadSeq = 0;
 
 const els = {
   gate: $('#gate'),
@@ -371,9 +372,7 @@ function renderList() {
 }
 
 async function loadFacts({ reset = false, append = false } = {}) {
-  if (state.loading) return;
-  state.loading = true;
-  els.refresh.disabled = true;
+  const seq = ++loadSeq;
   if (reset) {
     state.facts = [];
     state.cursor = null;
@@ -383,14 +382,12 @@ async function loadFacts({ reset = false, append = false } = {}) {
   if (append && state.cursor) params.set('cursor', state.cursor);
   try {
     const data = await api(`/v1/facts?${params.toString()}`);
+    if (seq !== loadSeq) return;
     state.facts = append ? state.facts.concat(data.facts) : data.facts;
     state.cursor = data.next;
     renderList();
   } catch (error) {
-    toast(error.message, true);
-  } finally {
-    state.loading = false;
-    els.refresh.disabled = false;
+    if (seq === loadSeq) toast(error.message, true);
   }
 }
 
@@ -626,6 +623,8 @@ function bind() {
   });
 
   document.addEventListener('keydown', (event) => {
+    const tag = document.activeElement?.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
     if (event.key === '/' && document.activeElement !== els.q) {
       event.preventDefault();
       els.q.focus();
