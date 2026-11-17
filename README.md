@@ -9,7 +9,7 @@
 
 ## 为什么
 
-三种 harness 各自有会话记忆，两台设备的项目上下文互不可见。loam 把「决策 / 坑 / 约定 / 事实」抽成一行文本 + 元数据，按 project 隔离、按 hash 幂等、按设备鉴权，任何一端写入，另一端开工前 `loam search` 即可命中。
+多种 harness 各自有会话记忆，跨设备的项目上下文互不可见。loam 把「决策 / 坑 / 约定 / 事实」抽成一行文本 + 元数据，按 project 隔离、按 hash 幂等、按设备鉴权，任何一端写入，另一端开工前 `loam search` 即可命中。
 
 ```
 harness (DSH / Claude Code / Codex)
@@ -126,13 +126,32 @@ pnpm check:licenses              # 许可证白名单
 - `push main`（`worker/**`）→ `deploy`：D1 schema → `wrangler deploy` → `/health` 冒烟；由仓库变量 `CF_DEPLOY=true` 开启
 - `tag v*` → `release`：全量测试 → `pnpm build` → `npm publish --provenance --access public`
 
-首次启用自动部署与发布（仓库 secrets 只设一次）：
+首次启用自动部署（仓库 secrets 只设一次）：
 
 ```bash
 gh variable set CF_DEPLOY --body true
 gh secret set CLOUDFLARE_ACCOUNT_ID --body "56cf8c921cb267fdae6d1f401bff12e2"
 gh secret set CLOUDFLARE_API_TOKEN      # Workers Scripts:Edit + D1:Edit
-gh secret set NPM_TOKEN                 # npm Automation token
+```
+
+发布走 **Trusted Publishing（OIDC）**，不需要 `NPM_TOKEN`。但包首次发布前 npm 侧还不存在条目，必须先手动发一次：
+
+```bash
+cd cli && npm login && npm publish --access public   # 仅首次
+```
+
+然后配置 `npmjs.com/package/@loam/cli/settings → Trusted Publisher → GitHub Actions`：
+
+| 字段 | 值 |
+|---|---|
+| Organization or user | `yidasanqian` |
+| Repository | `loam` |
+| Workflow filename | `release.yml` |
+| Environment | 留空 |
+
+之后打 tag 即自动发布，provenance 由 OIDC 生成：
+
+```bash
 git tag v0.1.0 && git push --tags
 ```
 
