@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { afterEach, test } from 'node:test';
 import { detectProject, detectRepoRoot, sanitizeProject } from '../../src/project.ts';
@@ -22,9 +24,13 @@ test('LOAM_PROJECT wins over detection', () => {
   assert.equal(detectProject(), 'demo-project');
 });
 
-test('detectRepoRoot falls back to the starting directory', () => {
-  const start = path.resolve(process.cwd());
-  assert.equal(detectRepoRoot(start), start);
+test('detectRepoRoot falls back to the starting directory without a .git parent', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'loam-project-'));
+  try {
+    assert.equal(detectRepoRoot(dir), dir);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test('detectProject derives a stable name from the directory', () => {
