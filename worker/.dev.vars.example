@@ -1,0 +1,3 @@
+# Copy to .dev.vars for `wrangler dev --local`. Never commit the real value.
+# Generate one with: node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"
+ADMIN_TOKEN=replace-me
