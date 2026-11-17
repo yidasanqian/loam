@@ -137,8 +137,10 @@ gh secret set CLOUDFLARE_API_TOKEN      # Workers Scripts:Edit + D1:Edit
 发布走 **Trusted Publishing（OIDC）**，不需要 `NPM_TOKEN`。但包首次发布前 npm 侧还不存在条目，必须先手动发一次：
 
 ```bash
-cd cli && npm login && npm publish --access public   # 仅首次
+cd cli && npm login && npm publish --access public   # 仅首次；cli/.npmrc 已锁定 npmjs
 ```
+
+> `cli/.npmrc` 与 `publishConfig.registry` 都固定到 `https://registry.npmjs.org/`。若在仓库根目录执行 `npm login`，记得加 `--registry=https://registry.npmjs.org/`，否则会打开 npmmirror 的登录页。
 
 然后配置 `npmjs.com/package/@loam/cli/settings → Trusted Publisher → GitHub Actions`：
 

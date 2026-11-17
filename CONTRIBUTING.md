@@ -47,4 +47,4 @@ pnpm -r test
 
 - 一个 commit 一个最小功能单元；信息写「为什么」，不写「改了哪些文件」。
 - 不提交 `~/.loamrc.json`、`.dev.vars`、outbox、缓存、`dist/`。
-- 发布：`pnpm build && npm publish --provenance`（发布名已定为 `@loam/cli`）。
+- 发布：`cd cli && npm login && npm publish --access public`（`cli/.npmrc` 固定 npmjs，勿用镜像 registry）。
