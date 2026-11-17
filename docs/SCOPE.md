@@ -40,7 +40,6 @@
 | 多用户 / RBAC | 单人用不到 | 每设备一 token，独立撤销 |
 | 服务端 LLM 抽取 | 撞 10 ms CPU + 费用 | agent 自写摘要（ADR-0003） |
 | 图 / 时态图谱 / 实体消解 | 复杂度超需求 | 需要时迁 Hindsight |
-| Web UI | ~~非必要~~ → v0.1 追加：同源管理页，不做富文本/协作 | `worker/public/` + Bearer token（localStorage） |
 | 跨 project 全局语义搜索 | 混淆边界 | 按 project 隔离 + `--all` 显式跨库 |
 | 自动遗忘引擎 | 单人可控 | `loam prune --older 180d` |
 | 非 CF 后端 | 无第二实现 | v2 抽 Storage 接口 |
