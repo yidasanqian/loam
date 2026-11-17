@@ -112,6 +112,30 @@ export function validateFactInput(body: unknown): FactInput {
   };
 }
 
+export interface FactPatch {
+  text?: string;
+  kind?: FactKind;
+  tags?: string[];
+}
+
+export function validateFactPatch(body: unknown): FactPatch {
+  const obj = asObject(body);
+  const patch: FactPatch = {};
+  if ('text' in obj) {
+    if (typeof obj.text !== 'string') throw new ApiFailure(400, 'invalid_field', 'text must be a string');
+    const text = normalizeText(obj.text);
+    if (!text) throw new ApiFailure(400, 'invalid_field', 'text must not be empty');
+    if (byteLength(text) > MAX_TEXT_BYTES) throw new ApiFailure(413, 'too_large', `text exceeds ${MAX_TEXT_BYTES} bytes`);
+    patch.text = text;
+  }
+  if ('kind' in obj) patch.kind = validateKind(obj.kind);
+  if ('tags' in obj) patch.tags = validateTags(obj.tags);
+  if (patch.text === undefined && patch.kind === undefined && patch.tags === undefined) {
+    throw new ApiFailure(400, 'invalid_body', 'nothing to update: provide text, kind or tags');
+  }
+  return patch;
+}
+
 export interface SearchParams {
   project: string | null;
   kind: FactKind | null;

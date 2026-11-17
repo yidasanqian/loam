@@ -4,7 +4,7 @@ import { authenticate, constantTimeEqual, parseBearer, sha256Hex, touchDevice } 
 import type { Db } from './db.ts';
 import { activateDevice, listDevices, revokeDevice, rotateToken } from './devices.ts';
 import { ApiFailure } from './errors.ts';
-import { countProject, createFact, deleteFact, getFact, importFacts, pruneFacts, searchFacts } from './facts.ts';
+import { countProject, createFact, deleteFact, getFact, importFacts, listProjects, pruneFacts, searchFacts, updateFact } from './facts.ts';
 import {
   EXPORT_LIMIT,
   RATE_API_PER_MIN,
@@ -20,6 +20,7 @@ import {
   parseSearchParams,
   validateDeviceName,
   validateFactInput,
+  validateFactPatch,
   validateProject,
 } from './validate.ts';
 
@@ -139,6 +140,17 @@ app.get('/v1/facts/:id', async (c) => {
   const fact = await getFact(c.env.DB, c.req.param('id'));
   if (!fact) throw new ApiFailure(404, 'not_found', 'fact not found');
   return c.json({ fact });
+});
+
+app.patch('/v1/facts/:id', async (c) => {
+  requireScope(c.get('device'), 'write');
+  const patch = validateFactPatch(await readJson(c));
+  return c.json({ fact: await updateFact(c.env.DB, c.req.param('id'), patch) });
+});
+
+app.get('/v1/projects', async (c) => {
+  requireScope(c.get('device'), 'read');
+  return c.json({ projects: await listProjects(c.env.DB) });
 });
 
 app.delete('/v1/facts/:id', async (c) => {

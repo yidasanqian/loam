@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light">
+    <title>loam · 项目记忆</title>
+    <meta name="description" content="loam 记忆管理：检索、记录、修订与撤销设备。">
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%233f6b4f'/%3E%3Cpath d='M8 11h16M8 16h16M8 21h10' stroke='%23f6f3ec' stroke-width='2.4' stroke-linecap='round'/%3E%3C/svg%3E">
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <div id="gate" class="gate">
+      <div class="gate-card">
+        <div class="wordmark" aria-label="loam">
+          <svg viewBox="0 0 32 32" width="30" height="30" aria-hidden="true">
+            <rect width="32" height="32" rx="8" fill="currentColor"></rect>
+            <path d="M8 11h16M8 16h16M8 21h10" stroke="#f6f3ec" stroke-width="2.4" stroke-linecap="round"></path>
+          </svg>
+          <span>loam</span>
+        </div>
+        <h1>接上你的项目记忆</h1>
+        <p class="lede">决策、坑与约定沉淀成一层壤土，两台设备、三种 harness 共用同一份。</p>
+
+        <form id="gate-form" class="gate-form">
+          <label for="token">设备 token</label>
+          <input id="token" name="token" type="password" autocomplete="off" spellcheck="false" placeholder="loam_xxxxxxxx_…">
+          <button type="submit" class="btn primary">连接</button>
+          <p id="gate-error" class="form-error" role="alert"></p>
+        </form>
+
+        <details class="gate-help">
+          <summary>token 从哪里来？</summary>
+          <p>本机已登录时，打开 <code>~/.loamrc.json</code> 复制 <code>token</code>；或运行：</p>
+          <pre><code>loam login --server https://loam.sanqian.workers.dev --name 本机名</code></pre>
+          <p>token 只保存在这个浏览器（localStorage），请求只发往当前域名。服务端明文存储记忆，不要写入密钥。</p>
+        </details>
+      </div>
+      <p class="gate-foot mono">loam v0.1 · Workers + D1</p>
+    </div>
+
+    <div id="app" class="shell" hidden>
+      <header class="topbar">
+        <div class="wordmark small">
+          <svg viewBox="0 0 32 32" width="22" height="22" aria-hidden="true">
+            <rect width="32" height="32" rx="8" fill="currentColor"></rect>
+            <path d="M8 11h16M8 16h16M8 21h10" stroke="#f6f3ec" stroke-width="2.6" stroke-linecap="round"></path>
+          </svg>
+          <span>loam</span>
+        </div>
+        <p class="device mono"><span id="device-name">…</span><span class="dot-sep">·</span><span id="device-id">…</span></p>
+        <div class="top-actions">
+          <button id="export" class="btn ghost" type="button">导出 NDJSON</button>
+          <button id="open-devices" class="btn ghost" type="button">设备</button>
+          <button id="logout" class="btn ghost danger" type="button">退出</button>
+        </div>
+      </header>
+
+      <aside class="rail">
+        <div class="rail-heading">
+          <h2>项目</h2>
+          <button id="all-projects" class="link" type="button">全部</button>
+        </div>
+        <ul id="projects" class="project-list" aria-label="项目列表"></ul>
+        <p id="projects-empty" class="rail-empty" hidden>还没有记忆</p>
+
+        <div class="rail-heading"><h2>类型</h2></div>
+        <div id="kinds" class="kind-filter" role="group" aria-label="按类型筛选">
+          <button type="button" class="chip is-active" data-kind="">全部</button>
+          <button type="button" class="chip" data-kind="decision"><span class="kind-dot decision"></span>决策</button>
+          <button type="button" class="chip" data-kind="pitfall"><span class="kind-dot pitfall"></span>坑</button>
+          <button type="button" class="chip" data-kind="convention"><span class="kind-dot convention"></span>约定</button>
+          <button type="button" class="chip" data-kind="fact"><span class="kind-dot fact"></span>事实</button>
+        </div>
+
+        <label class="tag-field" for="tag">标签
+          <input id="tag" type="search" placeholder="installer" autocomplete="off">
+        </label>
+
+        <div class="rail-stats">
+          <span id="total-count" class="mono">—</span>
+          <span>条可检索记忆</span>
+        </div>
+      </aside>
+
+      <main class="main">
+        <div class="search-row">
+          <div class="search">
+            <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.5" fill="none" stroke="currentColor" stroke-width="1.6"></circle><path d="M13 13l4 4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"></path></svg>
+            <input id="q" type="search" placeholder="搜索记忆：关键词、坑、决策…" autocomplete="off" aria-label="搜索记忆">
+          </div>
+          <button id="refresh" class="btn ghost" type="button">刷新</button>
+        </div>
+
+        <section class="composer" aria-label="记录一条事实">
+          <textarea id="new-text" rows="2" placeholder="记录一条事实：一句话，越具体越有用。" aria-label="事实内容"></textarea>
+          <div class="composer-row">
+            <label class="sr-only" for="new-kind">类型</label>
+            <select id="new-kind" class="select">
+              <option value="fact">事实</option>
+              <option value="decision">决策</option>
+              <option value="pitfall">坑</option>
+              <option value="convention">约定</option>
+            </select>
+            <label class="sr-only" for="new-tags">标签</label>
+            <input id="new-tags" class="tags-input" placeholder="tags, 逗号分隔" autocomplete="off">
+            <label class="sr-only" for="new-project">项目</label>
+            <input id="new-project" class="project-input mono" list="project-options" placeholder="project" autocomplete="off" spellcheck="false">
+            <datalist id="project-options"></datalist>
+            <button id="add" class="btn primary" type="button">记录</button>
+          </div>
+        </section>
+
+        <div id="list" class="list" aria-live="polite"></div>
+        <div class="pager">
+          <button id="more" class="btn ghost" type="button" hidden>加载更多</button>
+          <p id="list-foot" class="list-foot mono"></p>
+        </div>
+      </main>
+    </div>
+
+    <dialog id="edit-dialog" class="dialog">
+      <form id="edit-form" method="dialog">
+        <h2>修订记忆</h2>
+        <label for="edit-text">内容</label>
+        <textarea id="edit-text" rows="5" required></textarea>
+        <div class="dialog-row">
+          <label for="edit-kind">类型
+            <select id="edit-kind" class="select">
+              <option value="fact">事实</option>
+              <option value="decision">决策</option>
+              <option value="pitfall">坑</option>
+              <option value="convention">约定</option>
+            </select>
+          </label>
+          <label for="edit-tags">标签
+            <input id="edit-tags" class="tags-input" autocomplete="off">
+          </label>
+        </div>
+        <p class="dialog-hint">修改会重算幂等 hash；与既有事实重复时服务端会拒绝。</p>
+        <div class="dialog-actions">
+          <button type="button" id="edit-cancel" class="btn ghost">取消</button>
+          <button type="submit" class="btn primary" id="edit-save">保存</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="devices-dialog" class="dialog wide">
+      <div class="dialog-head">
+        <h2>设备与 token</h2>
+        <button type="button" id="devices-close" class="btn ghost">关闭</button>
+      </div>
+      <p class="dialog-hint">撤销立即生效，只影响该设备；当前设备被撤销后需要重新登录。</p>
+      <div class="table-wrap">
+        <table class="device-table">
+          <thead><tr><th>ID</th><th>设备</th><th>权限</th><th>最近活跃</th><th></th></tr></thead>
+          <tbody id="device-rows"></tbody>
+        </table>
+      </div>
+      <p id="devices-error" class="form-error" role="alert"></p>
+    </dialog>
+
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+    <template id="fact-template">
+      <article class="fact">
+        <div class="fact-kind"><span class="kind-dot"></span><span class="kind-label"></span></div>
+        <div class="fact-body">
+          <p class="fact-text"></p>
+          <ul class="fact-tags"></ul>
+          <p class="fact-meta">
+            <span class="meta-harness"></span><span class="dot-sep">·</span>
+            <span class="meta-device"></span><span class="dot-sep">·</span>
+            <time class="meta-time"></time><span class="dot-sep">·</span>
+            <code class="meta-id"></code>
+          </p>
+        </div>
+        <div class="fact-actions">
+          <button type="button" class="btn-mini" data-action="edit">修订</button>
+          <button type="button" class="btn-mini" data-action="copy">复制 ID</button>
+          <button type="button" class="btn-mini danger" data-action="delete">删除</button>
+        </div>
+      </article>
+    </template>
+
+    <template id="project-template">
+      <li><button type="button" class="project"><span class="project-name"></span><span class="project-count mono"></span></button></li>
+    </template>
+
+    <template id="device-template">
+      <tr>
+        <td class="mono device-id"></td>
+        <td class="device-name"></td>
+        <td class="mono device-scopes"></td>
+        <td class="device-seen"></td>
+        <td><button type="button" class="btn-mini danger" data-action="revoke">撤销</button></td>
+      </tr>
+    </template>
+
+    <script src="/app.js" defer></script>
+  </body>
+</html>

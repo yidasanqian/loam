@@ -9,6 +9,10 @@ binding = "DB"
 database_name = "loam"
 database_id = "4595906c-ed50-479a-90e1-631ed84885c6"
 
+# Memory management UI, served from the same Worker origin.
+[assets]
+directory = "./public"
+
 # Native Workers rate limiting (free plan): PLAN §5.
 [[ratelimits]]
 name = "RL_AUTH"

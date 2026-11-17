@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { env, SELF } from 'cloudflare:test';
 import schemaSql from '../../schema.sql?raw';
+import { resetFallbackLimits } from '../../src/rate.ts';
 
 declare module 'cloudflare:test' {
   interface ProvidedEnv {
@@ -12,6 +13,7 @@ declare module 'cloudflare:test' {
 export const ADMIN_TOKEN = 'test-admin-token';
 
 export async function resetDb(): Promise<void> {
+  resetFallbackLimits();
   await env.DB.exec('DROP TABLE IF EXISTS facts; DROP TABLE IF EXISTS devices;');
   // D1 exec is line-oriented; split the schema and run each statement via batch.
   const statements = schemaSql

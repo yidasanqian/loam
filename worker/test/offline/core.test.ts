@@ -8,8 +8,10 @@ import {
   deleteFact,
   getFact,
   importFacts,
+  listProjects,
   pruneFacts,
   searchFacts,
+  updateFact,
 } from '../../src/facts.ts';
 import { ApiFailure } from '../../src/errors.ts';
 import type { Device } from '../../src/model.ts';
@@ -124,6 +126,37 @@ test('soft delete hides a fact and prune respects the age cutoff', async () => {
   const pruned = await pruneFacts(db, { project: 'loam', olderThanDays: 180, now });
   assert.equal(pruned, 1);
   assert.equal(await getFact(db, old.fact.id), null);
+});
+
+test('update rewrites the hash and rejects conflicting text', async () => {
+  const db = createTestDb();
+  const dev = device('dev-a');
+  const first = await createFact(db, dev, validateFactInput({ project: 'loam', text: 'alpha' }), 1_000);
+  await createFact(db, dev, validateFactInput({ project: 'loam', text: 'beta' }), 2_000);
+
+  const updated = await updateFact(db, first.fact.id, { text: 'gamma', tags: ['edited'] });
+  assert.equal(updated.text, 'gamma');
+  assert.deepEqual(updated.tags, ['edited']);
+  assert.equal((await searchFacts(db, parseSearchParams(new URLSearchParams('project=loam&q=gamma')))).facts[0].id, first.fact.id);
+  assert.equal((await searchFacts(db, parseSearchParams(new URLSearchParams('project=loam&q=alpha')))).facts.length, 0);
+
+  await assert.rejects(
+    () => updateFact(db, first.fact.id, { text: 'beta' }),
+    (error: unknown) => error instanceof ApiFailure && error.status === 409,
+  );
+  assert.deepEqual(await listProjects(db), [{ project: 'loam', facts: 2 }]);
+});
+
+test('update and project listing ignore deleted facts', async () => {
+  const db = createTestDb();
+  const dev = device('dev-a');
+  const fact = await createFact(db, dev, validateFactInput({ project: 'loam', text: 'gone' }), 1_000);
+  await deleteFact(db, fact.fact.id, 2_000);
+  await assert.rejects(
+    () => updateFact(db, fact.fact.id, { text: 'later' }),
+    (error: unknown) => error instanceof ApiFailure && error.status === 404,
+  );
+  assert.deepEqual(await listProjects(db), []);
 });
 
 test('re-adding a pruned fact revives it instead of staying hidden', async () => {

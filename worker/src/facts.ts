@@ -10,7 +10,7 @@ import {
   type FactKind,
   type FactRow,
 } from './model.ts';
-import { asObject, normalizeText, validateFactInput, type FactInput, type SearchParams } from './validate.ts';
+import { asObject, normalizeText, validateFactInput, type FactInput, type FactPatch, type SearchParams } from './validate.ts';
 
 const FACT_COLUMNS = 'id, project, kind, text, hash, tags, harness, device_id, device_name, created_at, deleted_at';
 
@@ -147,6 +147,42 @@ export async function getFact(db: Db, idOrPrefix: string): Promise<Fact | null> 
 export async function deleteFact(db: Db, id: string, now: number): Promise<boolean> {
   const result = await db.prepare('UPDATE facts SET deleted_at = ? WHERE id = ? AND deleted_at IS NULL').bind(now, id).run();
   return result.meta.changes > 0;
+}
+
+export async function updateFact(db: Db, id: string, patch: FactPatch): Promise<Fact> {
+  const row = await db
+    .prepare(`SELECT ${FACT_COLUMNS} FROM facts WHERE id = ? AND deleted_at IS NULL`)
+    .bind(id)
+    .first<FactRow>();
+  if (!row) throw new ApiFailure(404, 'not_found', 'fact not found');
+  const text = patch.text ?? row.text;
+  const kind = patch.kind ?? row.kind;
+  const tags = patch.tags ?? (row.tags ? row.tags.split(',') : []);
+  const hash = await factHash(row.project, kind, text);
+  const conflict = await db
+    .prepare('SELECT id FROM facts WHERE project = ? AND hash = ? AND id <> ?')
+    .bind(row.project, hash, id)
+    .first<{ id: string }>();
+  if (conflict) throw new ApiFailure(409, 'conflict', 'another fact already has this project/kind/text');
+  await db
+    .prepare('UPDATE facts SET text = ?, kind = ?, tags = ?, hash = ? WHERE id = ?')
+    .bind(text, kind, tags.join(','), hash, id)
+    .run();
+  return toFact({ ...row, text, kind, tags: tags.join(','), hash });
+}
+
+export interface ProjectSummary {
+  project: string;
+  facts: number;
+}
+
+export async function listProjects(db: Db): Promise<ProjectSummary[]> {
+  const result = await db
+    .prepare(
+      'SELECT project, COUNT(*) AS facts FROM facts WHERE deleted_at IS NULL GROUP BY project ORDER BY facts DESC, project ASC',
+    )
+    .all<ProjectSummary>();
+  return result.results.map((row) => ({ project: row.project, facts: Number(row.facts) }));
 }
 
 export async function pruneFacts(

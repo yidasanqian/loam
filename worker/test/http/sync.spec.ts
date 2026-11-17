@@ -57,6 +57,43 @@ describe('sync', () => {
     assert.equal(await stats(a.token, 'loam'), 1);
   });
 
+  test('editing a fact rewrites it and rejects duplicate text', async () => {
+    const a = await activate('win-desktop');
+    const created = await addFact(a.token, { project: 'loam', text: 'alpha' });
+    const first = (await created.json()) as { fact: { id: string } };
+    const second = await addFact(a.token, { project: 'loam', text: 'beta' });
+    assert.equal(second.status, 201);
+
+    const patched = await call(a.token, `/v1/facts/${first.fact.id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ text: 'gamma', tags: ['edited'] }),
+    });
+    assert.equal(patched.status, 200);
+    const body = (await patched.json()) as { fact: { text: string; tags: string[] } };
+    assert.equal(body.fact.text, 'gamma');
+    assert.deepEqual(body.fact.tags, ['edited']);
+
+    const conflict = await call(a.token, `/v1/facts/${first.fact.id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ text: 'beta' }),
+    });
+    assert.equal(conflict.status, 409);
+  });
+
+  test('projects endpoint lists counts', async () => {
+    const a = await activate('win-desktop');
+    await addFact(a.token, { project: 'loam', text: 'one' });
+    await addFact(a.token, { project: 'other', text: 'two' });
+    const response = await call(a.token, '/v1/projects');
+    assert.equal(response.status, 200);
+    const body = (await response.json()) as { projects: Array<{ project: string; facts: number }> };
+    assert.deepEqual(
+      body.projects.map((entry) => entry.project).sort(),
+      ['loam', 'other'],
+    );
+    assert.equal(body.projects.find((entry) => entry.project === 'loam')?.facts, 1);
+  });
+
   test('export pages with a cursor', async () => {
     const a = await activate('win-desktop');
     for (let i = 0; i < 3; i += 1) await addFact(a.token, { project: 'loam', text: `fact ${i}` });
