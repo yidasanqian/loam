@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented here. Format: [Keep a Changelog](https://keepachangelog.com/), SemVer.
 
+## [0.1.2] - 2026-11-18
+
+### Changed
+
+- release workflow 在 `npm publish` 前打印 OIDC claims（`aud` / `repository` / `job_workflow_ref` / `ref` / `environment` 等），用于核对 Trusted Publisher 配置。0.1.1 为手动 granular-token 发布；0.1.2 起回到 OIDC + provenance。
+
 ## [0.1.1] - 2026-11-18
 
 ### Added

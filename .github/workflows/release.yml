@@ -35,6 +35,10 @@ jobs:
             echo "::error::@yidasanqian/loam@${VERSION} is already published; bump the version before tagging."
             exit 1
           fi
+      - name: OIDC claims
+        run: |
+          token=$(curl -sS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=npm:registry.npmjs.org" | node -p "JSON.parse(require('fs').readFileSync(0,'utf8')).value")
+          node -e 'const p=JSON.parse(Buffer.from(process.argv[1].split(".")[1],"base64url").toString()); for (const k of ["aud","repository","repository_owner","job_workflow_ref","ref","environment","event_name"]) console.log(k+"="+(p[k]??"<none>"))' "$token"
       - run: pnpm typecheck
       - run: pnpm -r test
       - run: pnpm --filter @loam/worker run test:offline
