@@ -2,6 +2,22 @@
 
 All notable changes to this project are documented here. Format: [Keep a Changelog](https://keepachangelog.com/), SemVer.
 
+## [0.3.0] - 2026-11-18
+
+### Added
+
+- 事实可带**证据指针**：`--path` / `--symbol` / `--check`，写入时自动记录 `commit`（`git rev-parse --short=12 HEAD`）与时点。路径即适用范围：同一句话在别的文件重复写入会并入路径（≤8），而不是被当成重复丢掉。
+- `loam search --file <path>`：从文件反查把它当适用范围的事实，改文件前先看约定/坑。
+- `loam show` 追加 `evidence:` 行；路径失效时整组证据被丢弃并提示重新定位，事实本身保留。搜索与列表行仍然不带证据（守 5 条 × 100 字符预算）。
+- `scripts/apply-d1-migrations.mjs`：从 `worker/migrations/*.sql` 反推目标库缺的 DDL，只发 `ADD COLUMN` 与 `CREATE ... IF NOT EXISTS`，可重复执行；遇到 `DROP` / 裸 `INSERT` / 无 `IF NOT EXISTS` 的 `CREATE` 退出 1 交人工。
+
+### Changed
+
+- D1 迁移不再需要人工执行：`deploy.yml` 在 verify 与 deploy 之间调用同一个脚本，本地 `pnpm --filter @loam/worker run db:apply` 也用它。
+- `worker/package.json` 的 `deploy` 改为「建表 → 补迁移 → 部署」，三种库状态（全新 / 落后 / 最新）都被覆盖。
+- 证据越界一律 400：绝对路径、Windows 分隔符、`a.ts:12` 行号、`..` 越界、未知符号格式。行号被刻意拒绝——改一行就错，却仍读作“已核对”。
+- `cli/skills/SKILL.md` 与 `docs/CLI.md` 补上证据规则：带路径即在声明作用域，证据只出现在 `show`。
+
 ## [0.2.0] - 2026-11-18
 
 ### Added
