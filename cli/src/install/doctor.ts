@@ -1,3 +1,4 @@
+import os from 'node:os';
 import path from 'node:path';
 import { Client } from '../client.ts';
 import { readConfig, readLastRecall, resolveConfig } from '../config.ts';
@@ -7,6 +8,7 @@ import { readTextFile } from '../util.ts';
 import { VERSION } from '../version.ts';
 import { hasBlock } from './blocks.ts';
 import { readInstallRecord } from './index.ts';
+import { skillInstalled, skillStoreDir, skillsCommand } from './skill.ts';
 
 export interface Check {
   name: string;
@@ -84,6 +86,13 @@ export async function doctorChecks(options: { repoRoot?: string } = {}): Promise
         : { name: 'files', ok: true, detail: `${record.files.length} 个已记录文件` },
     );
   }
+
+  const store = skillStoreDir(os.homedir());
+  checks.push(
+    skillInstalled(os.homedir())
+      ? { name: 'skill', ok: true, detail: store }
+      : { name: 'skill', ok: false, detail: `没有 loam skill（${store}）`, fix: skillsCommand('add', ['claude-code', 'codex']) },
+  );
 
   const recall = readLastRecall();
   checks.push(

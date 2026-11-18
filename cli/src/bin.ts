@@ -122,6 +122,32 @@ function isTty(): boolean {
   return Boolean(process.stdin.isTTY);
 }
 
+interface LoginOptions {
+  server: string;
+  name?: string;
+  adminTokenFile?: string;
+  scopes?: string;
+  proxy?: string;
+}
+
+/** Shared by `login` and `onboard`. */
+async function loginDevice(options: LoginOptions): Promise<void> {
+  const server = options.server.trim();
+  if (!/^https?:\/\//u.test(server)) throw new CliError('bad_server', '--server 需要 http(s):// 前缀', 2);
+  const name = sanitizeDeviceName(options.name ?? os.hostname());
+  const adminToken = await readAdminToken(options.adminTokenFile);
+  const result = await activate(server, adminToken, name, options.scopes ?? 'read,write');
+  writeConfig({
+    server: server.replace(/\/+$/u, ''),
+    deviceId: result.device.id,
+    deviceName: result.device.name,
+    token: result.token,
+    proxy: options.proxy ?? readConfig()?.proxy,
+  });
+  console.log(`${pc.green('✓')} ${result.created ? '已注册' : '已轮换'}设备 ${pc.bold(result.device.name)} (${shortId(result.device.id)})`);
+  console.log(pc.dim(`  token 保存在 ${configPath()}`));
+}
+
 program.name('loam').description('单人 / 多设备 / 多 harness 的项目记忆').version(VERSION, '-v, --version');
 
 program
@@ -133,22 +159,7 @@ program
   .option('--scopes <scopes>', 'read,write', 'read,write')
   .option('--proxy <url>', 'HTTP 代理，如 http://127.0.0.1:7890')
   .action((options: { server: string; name?: string; adminTokenFile?: string; scopes: string; proxy?: string }) =>
-    run(async () => {
-      const server = options.server.trim();
-      if (!/^https?:\/\//u.test(server)) throw new CliError('bad_server', '--server 需要 http(s):// 前缀', 2);
-      const name = sanitizeDeviceName(options.name ?? os.hostname());
-      const adminToken = await readAdminToken(options.adminTokenFile);
-      const result = await activate(server, adminToken, name, options.scopes);
-      writeConfig({
-        server: server.replace(/\/+$/u, ''),
-        deviceId: result.device.id,
-        deviceName: result.device.name,
-        token: result.token,
-        proxy: options.proxy ?? readConfig()?.proxy,
-      });
-      console.log(`${pc.green('✓')} ${result.created ? '已注册' : '已轮换'}设备 ${pc.bold(result.device.name)} (${shortId(result.device.id)})`);
-      console.log(pc.dim(`  token 保存在 ${configPath()}`));
-    }),
+    run(() => loginDevice(options)),
   );
 
 program
@@ -522,6 +533,47 @@ program
       console.log(pc.dim(`  接线版本：${record ? record.version : '未安装'}`));
       if (plan.commands.length === 0) console.log(pc.dim('  无需操作'));
       for (const command of plan.commands) console.log(`  ${command}`);
+    }),
+  );
+
+program
+  .command('onboard')
+  .description('一条命令：登录本机 + 接线 DSH / Claude Code / Codex')
+  .requiredOption('--server <url>', 'worker 地址，如 https://loam.example.workers.dev')
+  .option('--name <name>', '设备名（默认主机名）')
+  .option('--admin-token-file <file>', '包含 ADMIN_TOKEN 的文件（也可用 LOAM_ADMIN_TOKEN）')
+  .option('--proxy <url>', 'HTTP 代理，如 http://127.0.0.1:7890')
+  .option('--only <list>', '只装指定端，逗号分隔 dsh,claude,codex')
+  .option('--with-hooks', '额外安装 Claude Code UserPromptSubmit hook')
+  .option('--repo <path>', '项目根（默认探测 git 根）')
+  .action((options: {
+    server: string;
+    name?: string;
+    adminTokenFile?: string;
+    proxy?: string;
+    only?: string;
+    withHooks?: boolean;
+    repo?: string;
+  }) =>
+    run(async () => {
+      if (readConfig()?.token) console.log(pc.dim('已有设备 token，跳过登录'));
+      else await loginDevice(options);
+
+      const only = options.only
+        ? options.only
+            .split(',')
+            .map((part) => part.trim())
+            .filter(Boolean)
+        : undefined;
+      const result = await install({
+        only,
+        yes: true,
+        withHooks: Boolean(options.withHooks),
+        repoRoot: options.repo,
+      });
+      for (const action of result.actions) console.log(action);
+      console.log(`${pc.green('✓')} 已接线 ${result.record.harnesses.join(', ')}`);
+      console.log(pc.dim('  试一下：loam search "关键词"'));
     }),
   );
 

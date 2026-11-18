@@ -10,6 +10,7 @@ import { install, uninstall } from '../../src/install/index.ts';
 let root: string;
 let home: string;
 let repo: string;
+let skillCalls: string[][];
 
 beforeEach(() => {
   root = fs.mkdtempSync(path.join(os.tmpdir(), 'loam-test-'));
@@ -19,6 +20,7 @@ beforeEach(() => {
   fs.mkdirSync(repo, { recursive: true });
   fs.writeFileSync(path.join(repo, 'AGENTS.md'), '# project rules\n');
   process.env.LOAM_DIR = path.join(root, 'loam-home');
+  skillCalls = [];
 });
 
 afterEach(() => {
@@ -26,8 +28,19 @@ afterEach(() => {
   fs.rmSync(root, { recursive: true, force: true });
 });
 
+/** Stands in for `npx skills`: records the args and materializes the shared store. */
+function stubSkill(args: string[]) {
+  skillCalls.push(args);
+  if (args.includes('add')) {
+    const store = path.join(home, '.agents', 'skills', 'loam');
+    fs.mkdirSync(store, { recursive: true });
+    fs.writeFileSync(path.join(store, 'SKILL.md'), '---\nname: loam\n---\n');
+  }
+  return { ok: true, detail: 'stub' };
+}
+
 function runInstall(extra: Parameters<typeof install>[0] = {}) {
-  return install({ home, repoRoot: repo, env: {} as NodeJS.ProcessEnv, yes: true, ...extra });
+  return install({ home, repoRoot: repo, env: {} as NodeJS.ProcessEnv, yes: true, runSkill: stubSkill, ...extra });
 }
 
 test('a clean machine gets all three harnesses wired', async () => {
@@ -41,8 +54,17 @@ test('a clean machine gets all three harnesses wired', async () => {
     path.join(home, '.codex', 'AGENTS.md'),
   ];
   for (const target of expected) assert.ok(fs.existsSync(target), `${target} should exist`);
-  assert.ok(fs.existsSync(path.join(home, '.dsh', 'skills', 'loam', 'SKILL.md')));
-  assert.ok(fs.existsSync(path.join(home, '.claude', 'skills', 'loam', 'SKILL.md')));
+
+  // The skill comes from the Skills CLI, never from a file copy.
+  const add = skillCalls.find((args) => args.includes('add'));
+  assert.ok(add, 'npx skills add should run');
+  assert.deepEqual(add.slice(add.indexOf('--skill')), ['--skill', 'loam', '--global', '--yes', '--agent', 'claude-code', 'codex']);
+  assert.deepEqual(result.record.skill?.agents, ['claude-code', 'codex']);
+  assert.equal(fs.existsSync(path.join(home, '.claude', 'skills', 'loam', 'SKILL.md')), false);
+
+  // DSH reads the shared store (`~/.agents/skills`), the same target the codex agent uses.
+  assert.ok(fs.existsSync(path.join(home, '.agents', 'skills', 'loam', 'SKILL.md')));
+  assert.equal(fs.existsSync(path.join(home, '.dsh', 'skills', 'loam')), false);
   assert.ok(fs.existsSync(installRecordPath()));
 });
 
@@ -53,6 +75,7 @@ test('--only codex touches only the codex and repo files', async () => {
   assert.ok(fs.existsSync(path.join(home, '.codex', 'AGENTS.md')));
   assert.equal(fs.existsSync(path.join(home, '.dsh', 'AGENTS.md')), false);
   assert.equal(fs.existsSync(path.join(home, '.claude', 'CLAUDE.md')), false);
+  assert.deepEqual(result.record.skill?.agents, ['codex']);
 });
 
 test('reinstalling is idempotent', async () => {
@@ -64,23 +87,34 @@ test('reinstalling is idempotent', async () => {
   assert.equal(second.split(BLOCK_START).length - 1, 1);
 });
 
+test('a legacy skill copy is removed so the store is the only copy', async () => {
+  const legacy = path.join(home, '.dsh', 'skills', 'loam');
+  fs.mkdirSync(legacy, { recursive: true });
+  fs.writeFileSync(path.join(legacy, 'SKILL.md'), 'old copy');
+  await runInstall({ only: ['dsh'] });
+  assert.equal(fs.existsSync(legacy), false);
+  assert.ok(fs.existsSync(path.join(home, '.agents', 'skills', 'loam', 'SKILL.md')));
+});
+
 test('dry-run writes nothing', async () => {
   const before = fs.readFileSync(path.join(repo, 'AGENTS.md'), 'utf8');
   await runInstall({ dryRun: true });
   assert.equal(fs.readFileSync(path.join(repo, 'AGENTS.md'), 'utf8'), before);
   assert.equal(fs.existsSync(installRecordPath()), false);
   assert.equal(fs.existsSync(path.join(home, '.dsh', 'AGENTS.md')), false);
+  assert.equal(skillCalls.length, 0);
 });
 
 test('uninstall restores pre-existing files and deletes created ones', async () => {
   await runInstall();
-  uninstall({});
+  uninstall({ runSkill: stubSkill });
 
   assert.equal(fs.readFileSync(path.join(repo, 'AGENTS.md'), 'utf8'), '# project rules\n');
   assert.equal(fs.existsSync(path.join(home, '.dsh', 'AGENTS.md')), false);
   assert.equal(fs.existsSync(path.join(home, '.claude', 'CLAUDE.md')), false);
   assert.equal(fs.existsSync(path.join(home, '.codex', 'AGENTS.md')), false);
-  assert.equal(fs.existsSync(path.join(home, '.dsh', 'skills', 'loam', 'SKILL.md')), false);
+  assert.equal(fs.existsSync(path.join(home, '.dsh', 'skills', 'loam')), false);
+  assert.ok(skillCalls.some((args) => args.includes('remove')));
   assert.equal(fs.existsSync(installRecordPath()), false);
 });
 
@@ -92,6 +126,6 @@ test('--with-hooks registers and removes the Claude inject hook', async () => {
   };
   assert.equal(settings.hooks.UserPromptSubmit[0].hooks[0].command, 'loam inject');
 
-  uninstall({});
+  uninstall({ runSkill: stubSkill });
   assert.equal(fs.existsSync(settingsFile), false);
 });

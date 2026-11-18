@@ -1,3 +1,8 @@
+---
+name: loam
+description: Record durable project facts once and recall them from any device and any harness. Use before planning a task (loam search) and after a decision, pitfall or convention worth keeping (loam add).
+---
+
 # loam
 
 Record durable project facts once and recall them from any device and any harness.

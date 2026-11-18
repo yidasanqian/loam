@@ -60,8 +60,8 @@ export function planUpgrade(input: { current: string; latest: string | null; wir
   }
   const commands: string[] = [];
   if (state === 'outdated' || state === 'unknown') commands.push(`npm i -g ${PACKAGE_NAME}@latest`);
-  // The installed skill/AGENTS block is a copy: it only refreshes when install runs.
-  // After an npm upgrade the wiring is always one version behind the target.
+  // The AGENTS block is a copy and the skill sits behind the Skills CLI: both
+  // refresh only when install (or `npx skills update loam`) runs.
   if (state === 'outdated' || input.wiring !== input.current) commands.push('loam install');
   return { current: input.current, latest: input.latest, wiring: input.wiring, state, commands };
 }

@@ -17,8 +17,7 @@
     "loam": "dist/bin.js"
   },
   "files": [
-    "dist",
-    "skills"
+    "dist"
   ],
   "engines": {
     "node": ">=22.6"
