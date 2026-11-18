@@ -2,6 +2,14 @@ import type { Config } from './config.ts';
 import { CliError, OfflineError } from './errors.ts';
 import { VERSION } from './version.ts';
 
+export interface FactEvidence {
+  paths: string[];
+  symbols: string[];
+  check: string;
+  commit: string;
+  at: number;
+}
+
 export interface Fact {
   id: string;
   project: string;
@@ -14,6 +22,7 @@ export interface Fact {
   createdAt: number;
   pinned?: boolean;
   importance?: number;
+  evidence?: FactEvidence | null;
   supersededBy?: string | null;
   supersededAt?: number | null;
 }
@@ -26,6 +35,7 @@ export interface FactInput {
   harness: string;
   pinned?: boolean;
   importance?: number;
+  evidence?: FactEvidence | null;
   supersedes?: string;
 }
 

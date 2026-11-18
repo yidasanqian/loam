@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import type { FactEvidence } from './client.ts';
 import { loamDir, outboxPath } from './config.ts';
 import { CliError, OfflineError } from './errors.ts';
 import { ensureDir, writeFileAtomic } from './util.ts';
@@ -11,6 +12,7 @@ export interface PendingFact {
   harness: string;
   pinned?: boolean;
   importance?: number;
+  evidence?: FactEvidence | null;
   supersedes?: string;
   queuedAt: number;
 }

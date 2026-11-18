@@ -65,3 +65,47 @@ test('formatDetail exposes provenance and tags', () => {
   assert.ok(detail.includes('tags: arch'));
   assert.ok(detail.includes('from dsh on win-desktop'));
 });
+
+test('formatDetail renders a live pointer set', () => {
+  const evidence = {
+    paths: ['cli/src/format.ts'],
+    symbols: ['formatFactLine'],
+    check: 'pnpm -r test',
+    commit: 'abc1234def01',
+    at: Date.UTC(2026, 10, 18),
+  };
+  const detail = formatDetail(fact({ evidence }), { exists: () => true });
+  assert.ok(detail.includes('evidence: cli/src/format.ts'));
+  assert.ok(detail.includes('formatFactLine'));
+  assert.ok(detail.includes('check: pnpm -r test'));
+  assert.ok(detail.includes('@abc1234def01'));
+  assert.ok(detail.includes('2026-11-18'));
+});
+
+test('a dead pointer set is dropped whole instead of dressed up', () => {
+  const evidence = {
+    paths: ['cli/src/format.ts'],
+    symbols: ['formatFactLine'],
+    check: 'pnpm -r test',
+    commit: 'abc1234def01',
+    at: Date.UTC(2026, 10, 18),
+  };
+  const detail = formatDetail(fact({ evidence }), { exists: () => false });
+  assert.ok(detail.includes('已失效'));
+  assert.ok(detail.includes(base.text), 'the fact itself survives a stale pointer');
+  assert.ok(!detail.includes('check: pnpm -r test'), 'an unusable check must not be presented');
+  assert.ok(!detail.includes('formatFactLine'));
+});
+
+test('evidence never enters the search envelope', () => {
+  const line = formatFactLine(
+    fact({ evidence: { paths: ['cli/src/format.ts'], symbols: [], check: 'pnpm -r test', commit: '', at: 0 } }),
+  );
+  assert.ok(!line.includes('evidence'));
+  assert.ok(!line.includes('cli/src/format.ts'));
+  assert.ok(Array.from(line).length <= 100);
+});
+
+test('a fact without evidence says nothing about it', () => {
+  assert.ok(!formatDetail(fact()).includes('evidence:'));
+});

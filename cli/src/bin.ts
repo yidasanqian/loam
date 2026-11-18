@@ -5,7 +5,7 @@ import os from 'node:os';
 import { Command } from 'commander';
 import pc from 'picocolors';
 import { cacheAgeMinutes, readCache, writeCache } from './cache.ts';
-import { Client, activate, type CreateResponse, type DeviceSummary, type Fact, type SearchResponse } from './client.ts';
+import { Client, activate, type CreateResponse, type DeviceSummary, type Fact, type FactEvidence, type SearchResponse } from './client.ts';
 import { configPath, readConfig, requireConfig, resolveConfig, writeConfig, writeLastRecall } from './config.ts';
 import { CliError, OfflineError } from './errors.ts';
 import { formatDetail, formatFacts, oneLine, shortId } from './format.ts';
@@ -87,10 +87,42 @@ function queueFact(input: {
   harness: string;
   pinned?: boolean;
   importance?: number;
+  evidence?: FactEvidence | null;
   supersedes?: string;
 }): void {
   const queued = appendOutbox({ ...input, queuedAt: Date.now() });
   console.log(pc.yellow(`~ 已写入 outbox（${queued} 条待 loam flush）`));
+}
+
+function parseCsv(raw?: string): string[] {
+  if (!raw) return [];
+  return raw
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+/** Captured, not asked for: the anchor is only useful if it matches the code state. */
+function detectCommit(): string {
+  try {
+    const result = spawnSync('git', ['rev-parse', '--short=12', 'HEAD'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+    const sha = (result.stdout ?? '').trim().toLowerCase();
+    return /^[0-9a-f]{7,40}$/u.test(sha) ? sha : '';
+  } catch {
+    return '';
+  }
+}
+
+function collectEvidence(paths?: string, symbols?: string, check?: string): FactEvidence | null {
+  const evidence: FactEvidence = {
+    paths: parseCsv(paths),
+    symbols: parseCsv(symbols),
+    check: (check ?? '').trim(),
+    commit: detectCommit(),
+    at: Date.now(),
+  };
+  if (evidence.paths.length === 0 && evidence.symbols.length === 0 && !evidence.check && !evidence.commit) return null;
+  return evidence;
 }
 
 function sanitizeDeviceName(name: string): string {
@@ -172,10 +204,13 @@ program
   .option('--pin', '标记为常驻（注入与复盘优先，最多 8 条/project）')
   .option('--importance <n>', '重要度 1..5，默认 3')
   .option('--supersedes <id>', '这条新事实取代的旧事实 id（8 位前缀即可）')
+  .option('--path <paths>', '证据：仓库相对路径，逗号分隔（不要带行号）')
+  .option('--symbol <symbols>', '证据：符号名，逗号分隔（Class.method 亦可）')
+  .option('--check <command>', '证据：能重跑这条结论的验证命令')
   .option('--stdin', '从 stdin 读取文本')
   .option('--offline', '直接写入本地 outbox')
   .option('--json')
-  .action((textArgs: string[], options: { kind: string; project?: string; tags?: string; harness: string; pin?: boolean; importance?: string; supersedes?: string; stdin?: boolean; offline?: boolean; json?: boolean }) =>
+  .action((textArgs: string[], options: { kind: string; project?: string; tags?: string; harness: string; pin?: boolean; importance?: string; supersedes?: string; path?: string; symbol?: string; check?: string; stdin?: boolean; offline?: boolean; json?: boolean }) =>
     run(async () => {
       const raw = options.stdin ? await readStdin() : (textArgs ?? []).join(' ');
       if (!raw.trim()) throw new CliError('empty_text', '文本为空：loam add "…" 或 --stdin', 2);
@@ -183,6 +218,7 @@ program
       if (!Number.isInteger(importance) || importance < 1 || importance > 5) {
         throw new CliError('bad_importance', '--importance 取值 1..5', 2);
       }
+      const evidence = collectEvidence(options.path, options.symbol, options.check);
       const input = {
         project: sanitizeProject(options.project ?? detectProject()),
         kind: options.kind,
@@ -191,6 +227,7 @@ program
         harness: options.harness,
         pinned: Boolean(options.pin),
         importance,
+        ...(evidence ? { evidence } : {}),
         ...(options.supersedes ? { supersedes: options.supersedes } : {}),
       };
       if (input.tags.length > 8) throw new CliError('too_many_tags', '最多 8 个标签', 2);
@@ -224,11 +261,12 @@ program
   .option('-a, --all', '跨 project')
   .option('-k, --kind <kind>')
   .option('-t, --tag <tag>')
+  .option('--file <path>', '反查：evidence 里出现过这个路径的事实')
   .option('-l, --limit <n>', '1..5', '5')
   .option('--sort <mode>', 'rank（常驻 > 重要度 > 时间）或 recent', 'rank')
   .option('--json')
   .option('--no-cache', '离线时不要读缓存')
-  .action((queryArgs: string[], options: { project?: string; all?: boolean; kind?: string; tag?: string; limit: string; sort: string; json?: boolean; cache?: boolean }) =>
+  .action((queryArgs: string[], options: { project?: string; all?: boolean; kind?: string; tag?: string; file?: string; limit: string; sort: string; json?: boolean; cache?: boolean }) =>
     run(async () => {
       const config = requireConfig();
       const limit = Number(options.limit);
@@ -246,6 +284,7 @@ program
       if (query) params.set('q', query);
       if (options.kind) params.set('kind', options.kind);
       if (options.tag) params.set('tag', options.tag);
+      if (options.file) params.set('file', options.file);
 
       const cacheKey = params.toString();
       let payload: SearchResponse;
@@ -475,6 +514,7 @@ program
           harness: entry.harness,
           pinned: entry.pinned ?? false,
           importance: entry.importance ?? 3,
+          ...(entry.evidence ? { evidence: entry.evidence } : {}),
           ...(entry.supersedes ? { supersedes: entry.supersedes } : {}),
         });
       });

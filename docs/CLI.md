@@ -43,6 +43,7 @@ loam login --server URL --name win-desktop --admin-token-file ~/.loam-admin
 loam add "D1 is the source of truth" --kind decision --tags arch,cf
 echo "long text" | loam add --stdin --kind pitfall
 loam add "offline note" --offline
+loam add "行宽上限 100 字符" -k convention --path cli/src/format.ts --symbol formatFactLine --check "pnpm -r test"
 ```
 
 - `project` 默认：`LOAM_PROJECT` → git 根目录名 → cwd 目录名，非法字符转 `-`。
@@ -50,6 +51,10 @@ loam add "offline note" --offline
 - `--pin`：标为常驻，注入与复盘优先，`prune` 不删；建议每 project ≤8 条。
 - `--importance 1..5`：排序权重，默认 3（1 低、5 高）。
 - `--supersedes <id8>`：这条新事实取代旧事实。旧条目退出默认召回，`show` 仍可查看；服务端另有 `PATCH {supersededBy:null}` 可取消取代。
+- `--path <p1,p2>`：证据路径，仓库相对、**不要带行号**（绝对路径、Windows 分隔符、`a.ts:12` 都会被服务端 400 拒掉）。同一句话在别的文件重复写入会**并入**已有路径（上限 8），所以路径是这条事实的适用范围。
+- `--symbol <name>`：证据符号名，`Class.method` 也可；改名后仍能 grep 定位，比行号稳（上限 8）。
+- `--check "<cmd>"`：能重跑这条结论的命令，唯一能把「相信」换成「重算」的证据。
+- 证据缺省自动带 `commit`（`git rev-parse --short=12 HEAD`）与写入时点。**搜索/列表行不带证据**（守 5 条 × 100 字符预算），只有 `loam show` 打印；`show` 时路径失效则整组证据被丢弃并提示重新定位，事实本身保留。
 - 幂等键：`sha256(project ␀ kind ␀ 规范化空白后的 text)`；重复写入输出 `= 已存在 <id8>`。
 - 网络失败或 5xx 自动落 `~/.loam/outbox.jsonl`；4xx 直接报错（含 `invalid_supersedes`）。
 - 单条 text ≤4 KB；tags ≤8；project ≤128 字符。
@@ -61,6 +66,7 @@ loam search "bearer token"
 loam search "marker" -k pitfall -t installer -l 3
 loam search --all "wrangler"          # 跨 project
 loam search "x" --json --no-cache
+loam search --file cli/src/format.ts   # 反查：哪些事实把这条路径当成适用范围
 ```
 
 - 默认 5 条，硬上限 5；输出 ≤6 行（5 条 + 更多提示），每行 ≤100 字符。

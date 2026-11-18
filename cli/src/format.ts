@@ -1,4 +1,5 @@
-import type { Fact } from './client.ts';
+import fs from 'node:fs';
+import type { Fact, FactEvidence } from './client.ts';
 import { todayIso } from './util.ts';
 
 export const MAX_LINE = 100;
@@ -43,7 +44,40 @@ export function formatFacts(facts: FactLine[], options: FormatFactsOptions = {})
   return lines;
 }
 
-export function formatDetail(fact: Fact): string {
+export interface DetailOptions {
+  /** Injected so tests stay filesystem-free; production resolves against the cwd. */
+  exists?: (path: string) => boolean;
+}
+
+function defaultExists(path: string): boolean {
+  try {
+    return fs.existsSync(path);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Evidence is a pointer set, so the only failure worth rendering is a dead one: a
+ * path that no longer resolves would otherwise read as verified. The fact stays;
+ * the pointers are dropped as a group and the reader is told to look again.
+ */
+function formatEvidence(evidence: FactEvidence, exists: (path: string) => boolean): string {
+  const missing = evidence.paths.filter((path) => !exists(path));
+  if (missing.length > 0) {
+    return oneLine(`evidence: 已失效，找不到 ${missing.join(', ')}；事实保留，位置请重新定位`, MAX_LINE * 2);
+  }
+  const parts: string[] = [];
+  if (evidence.paths.length) parts.push(evidence.paths.join(', '));
+  if (evidence.symbols.length) parts.push(evidence.symbols.join(', '));
+  if (evidence.check) parts.push(`check: ${evidence.check}`);
+  if (evidence.commit) parts.push(`@${evidence.commit}`);
+  if (parts.length === 0) return '';
+  const at = evidence.at ? ` · ${new Date(evidence.at).toISOString().slice(0, 10)}` : '';
+  return oneLine(`evidence: ${parts.join(' · ')}${at}`, MAX_LINE * 2);
+}
+
+export function formatDetail(fact: Fact, options: DetailOptions = {}): string {
   const marks = [];
   if (fact.pinned) marks.push('pinned');
   if (fact.importance !== undefined && fact.importance !== DEFAULT_IMPORTANCE) marks.push(`importance ${fact.importance}/5`);
@@ -53,6 +87,7 @@ export function formatDetail(fact: Fact): string {
     fact.text,
     fact.tags.length ? `tags: ${fact.tags.join(', ')}` : '',
     `from ${fact.harness} on ${fact.deviceName || 'unknown device'} at ${new Date(fact.createdAt).toISOString()}`,
+    fact.evidence ? formatEvidence(fact.evidence, options.exists ?? defaultExists) : '',
   ];
   return lines.filter(Boolean).join('\n');
 }
