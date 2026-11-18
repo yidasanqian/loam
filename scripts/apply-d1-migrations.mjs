@@ -17,6 +17,9 @@
  * Idempotent by construction, so it is safe on every deploy and needs no
  * migration tracker next to the files. A fresh database is created first by
  * `wrangler d1 execute loam --file=schema.sql`, which is what `db:init*` does.
+ *
+ * D1 refuses `JOIN pragma_table_info(m.name)` (SQLITE_AUTH, code 7500), so the
+ * state comes from one sqlite_master query plus one pragma query per table.
  */
 
 import { spawnSync } from 'node:child_process';
@@ -28,9 +31,11 @@ import path from 'node:path';
 const HERE = import.meta.dirname;
 const WORKER_DIR = path.join(HERE, '..', 'worker');
 
-/** One round trip: every column of every table plus every named object. */
-const STATE_QUERY =
-  "SELECT 'column' AS kind, m.name AS tbl, p.name AS name FROM sqlite_master m JOIN pragma_table_info(m.name) p WHERE m.type = 'table' UNION ALL SELECT 'object' AS kind, '' AS tbl, name FROM sqlite_master WHERE type IN ('table','index','view','trigger')";
+const OBJECTS_QUERY = "SELECT name, type FROM sqlite_master WHERE type IN ('table','index','view','trigger')";
+
+function pragmaColumnsQuery(table) {
+  return `SELECT name FROM pragma_table_info('${String(table).replace(/'/g, "''")}')`;
+}
 
 function readStdin() {
   try {
@@ -41,7 +46,7 @@ function readStdin() {
 }
 
 /** wrangler prints a banner before its JSON array; slice at the first bracket. */
-function remoteState(raw) {
+function parseResults(raw) {
   const start = raw.indexOf('[');
   if (start < 0) throw new Error('无法解析 wrangler 输出：缺少 JSON 数组');
   let entries;
@@ -50,18 +55,15 @@ function remoteState(raw) {
   } catch {
     throw new Error('无法解析 wrangler JSON');
   }
+  return entries.flatMap((entry) => entry.results ?? []);
+}
+
+function stateFromRows(rows) {
   const columns = new Set();
   const objects = new Set();
-  for (const row of entries.flatMap((entry) => entry.results ?? [])) {
-    if (row.kind === 'object') {
-      objects.add(String(row.name));
-    } else if (row.tbl && row.name) {
-      columns.add(`${String(row.tbl)}.${String(row.name)}`);
-    } else if (row.name) {
-      // Older callers pipe `SELECT name FROM pragma_table_info('facts')`, which
-      // has no table column: everything in it belongs to facts.
-      columns.add(`facts.${String(row.name)}`);
-    }
+  for (const row of rows) {
+    if (row.tbl && row.name) columns.add(`${String(row.tbl)}.${String(row.name)}`);
+    else if (row.name) objects.add(String(row.name));
   }
   return { columns, objects };
 }
@@ -111,22 +113,27 @@ function planStatements(state, dir) {
   return plan;
 }
 
+/** The API error body is JSON; "text" carries the reason, the rest is noise. */
+function describeFailure(output) {
+  const texts = [...output.matchAll(/"text":\s*"([^"]+)"/g)].map((match) => match[1]);
+  if (texts.length > 0) return texts.join(' | ');
+  return output.trim().split('\n').slice(-6).join(' ');
+}
+
 /**
  * Runs wrangler's own entry with the current node binary. Going through
  * `pnpm exec` would need a shell on Windows (`.cmd` shims are EINVAL for
  * spawnSync), and the deploy job does not put node_modules/.bin on PATH either.
  */
 function wrangler(args, target) {
-  const bin = wranglerEntry();
-  const result = spawnSync(process.execPath, [bin, ...args], {
+  const result = spawnSync(process.execPath, [wranglerEntry(), ...args], {
     cwd: WORKER_DIR,
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   if (result.error) throw new Error(`跑不起 wrangler：${result.error.message}`);
   if (result.status !== 0) {
-    const detail = `${result.stderr ?? ''}${result.stdout ?? ''}`.trim().split('\n').slice(-6).join(' ');
-    throw new Error(`wrangler d1 execute 失败（${target}）：${detail}`);
+    throw new Error(`wrangler d1 execute 失败（${target}）：${describeFailure(`${result.stderr ?? ''}${result.stdout ?? ''}`)}`);
   }
   return result.stdout ?? '';
 }
@@ -150,6 +157,23 @@ function wranglerEntry() {
   throw new Error('找不到 wrangler：先在 worker/ 下 pnpm install');
 }
 
+function collectState(target) {
+  const flag = `--${target}`;
+  const rows = [];
+  const tables = [];
+  for (const row of parseResults(wrangler(['d1', 'execute', 'loam', flag, '--json', '--command', OBJECTS_QUERY], target))) {
+    const name = String(row.name);
+    rows.push({ kind: 'object', name });
+    // `_cf_*` is D1 bookkeeping; its columns never come from our migrations.
+    if (String(row.type) === 'table' && !name.startsWith('_cf_')) tables.push(name);
+  }
+  for (const table of tables) {
+    const columns = parseResults(wrangler(['d1', 'execute', 'loam', flag, '--json', '--command', pragmaColumnsQuery(table)], target));
+    for (const row of columns) rows.push({ kind: 'column', tbl: table, name: String(row.name) });
+  }
+  return stateFromRows(rows);
+}
+
 function report(plan) {
   if (plan.skipped.length > 0) console.error(`· 已存在，跳过：${plan.skipped.join(', ')}`);
   if (plan.statements.length === 0) {
@@ -161,14 +185,14 @@ function report(plan) {
 
 function apply(target) {
   const flag = `--${target}`;
-  const { columns, objects } = remoteState(wrangler(['d1', 'execute', 'loam', flag, '--json', '--command', STATE_QUERY], target));
-  const plan = planStatements({ columns, objects }, path.join(WORKER_DIR, 'migrations'));
+  const plan = planStatements(collectState(target), path.join(WORKER_DIR, 'migrations'));
   report(plan);
   if (plan.statements.length === 0) return;
 
   const file = path.join(os.tmpdir(), `loam-d1-${target}-${process.pid}.sql`);
   fs.writeFileSync(file, `${plan.statements.join('\n')}\n`);
   try {
+    for (const statement of plan.statements) console.error(`  ${statement}`);
     wrangler(['d1', 'execute', 'loam', flag, '--file', file, ...(target === 'remote' ? ['-y'] : [])], target);
   } finally {
     fs.rmSync(file, { force: true });
@@ -195,7 +219,7 @@ function main() {
 
   let plan;
   try {
-    plan = planStatements(remoteState(readStdin()), dir);
+    plan = planStatements(stateFromRows(parseResults(readStdin())), dir);
   } catch (error) {
     console.error(`✗ ${error.message}`);
     process.exit(1);
