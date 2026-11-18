@@ -28,6 +28,26 @@ export const DEFAULT_IMPORTANCE = 3;
 export const MAX_IMPORTANCE = 5;
 export const MAX_PINNED_HINT = 8;
 
+/** Evidence pointers: where a claim can be re-checked, never prose about it. */
+export const MAX_EVIDENCE_PATHS = 8;
+export const MAX_EVIDENCE_SYMBOLS = 8;
+export const MAX_PATH_LEN = 200;
+export const MAX_SYMBOL_LEN = 80;
+export const MAX_CHECK_LEN = 200;
+
+/**
+ * A pointer set, not a citation. `paths` doubles as the scope predicate: a fact
+ * with paths only claims those files, which is what lets a reader decide
+ * applicability without trusting the text.
+ */
+export interface FactEvidence {
+  paths: string[];
+  symbols: string[];
+  check: string;
+  commit: string;
+  at: number;
+}
+
 export interface Device {
   id: string;
   name: string;
@@ -54,6 +74,7 @@ export interface FactRow {
   harness: string;
   pinned: number;
   importance: number;
+  evidence: string;
   superseded_by: string | null;
   superseded_at: number | null;
   device_id: string;
@@ -71,6 +92,7 @@ export interface Fact {
   harness: string;
   pinned: boolean;
   importance: number;
+  evidence: FactEvidence | null;
   supersededBy: string | null;
   supersededAt: number | null;
   deviceId: string;
@@ -88,12 +110,31 @@ export function toFact(row: FactRow): Fact {
     harness: row.harness,
     pinned: row.pinned === 1,
     importance: row.importance ?? DEFAULT_IMPORTANCE,
+    evidence: parseEvidence(row.evidence),
     supersededBy: row.superseded_by ?? null,
     supersededAt: row.superseded_at ?? null,
     deviceId: row.device_id,
     deviceName: row.device_name,
     createdAt: row.created_at,
   };
+}
+
+/** Stored as JSON text; a torn or legacy value must read as "no evidence". */
+export function parseEvidence(raw: string | null | undefined): FactEvidence | null {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as Partial<FactEvidence>;
+    if (!parsed || typeof parsed !== 'object') return null;
+    return {
+      paths: Array.isArray(parsed.paths) ? parsed.paths : [],
+      symbols: Array.isArray(parsed.symbols) ? parsed.symbols : [],
+      check: typeof parsed.check === 'string' ? parsed.check : '',
+      commit: typeof parsed.commit === 'string' ? parsed.commit : '',
+      at: typeof parsed.at === 'number' ? parsed.at : 0,
+    };
+  } catch {
+    return null;
+  }
 }
 
 export function parseScopes(raw: string): Scope[] {

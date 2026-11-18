@@ -27,6 +27,7 @@ CREATE TABLE IF NOT EXISTS facts (
   harness TEXT NOT NULL,
   pinned INTEGER NOT NULL DEFAULT 0,
   importance INTEGER NOT NULL DEFAULT 3,
+  evidence TEXT NOT NULL DEFAULT '',
   superseded_by TEXT,
   superseded_at INTEGER,
   device_id TEXT NOT NULL,

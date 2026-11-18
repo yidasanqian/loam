@@ -3,12 +3,18 @@ import {
   DEFAULT_IMPORTANCE,
   DEFAULT_LIMIT,
   FACT_KINDS,
+  MAX_CHECK_LEN,
+  MAX_EVIDENCE_PATHS,
+  MAX_EVIDENCE_SYMBOLS,
   MAX_IMPORTANCE,
   MAX_LIMIT,
+  MAX_PATH_LEN,
   MAX_PROJECT_LEN,
+  MAX_SYMBOL_LEN,
   MAX_TAG_LEN,
   MAX_TAGS,
   MAX_TEXT_BYTES,
+  type FactEvidence,
   type FactKind,
   type SortMode,
 } from './model.ts';
@@ -98,6 +104,104 @@ export function validatePinned(value: unknown): boolean {
   return value;
 }
 
+const PATH_SEGMENT_RE = /^[A-Za-z0-9._@+-]+$/u;
+const SYMBOL_RE = /^[A-Za-z_$][A-Za-z0-9_$.]{0,79}$/u;
+const COMMIT_RE = /^[0-9a-f]{7,40}$/u;
+
+/**
+ * Evidence has to stay followable, so these are rejected on purpose: absolute
+ * paths (dead on the next machine), Windows separators (not portable), and
+ * `a.ts:12` line numbers. A line number is wrong after the first edit yet still
+ * reads as verified, which is worse than no pointer at all.
+ */
+export function normalizeEvidencePath(value: unknown, field = 'path'): string {
+  if (typeof value !== 'string') throw new ApiFailure(400, 'invalid_field', `${field} must be a string`);
+  const raw = value.trim().replace(/^\.\//u, '');
+  if (!raw) throw new ApiFailure(400, 'invalid_field', `${field} must not be empty`);
+  if (raw.length > MAX_PATH_LEN) throw new ApiFailure(400, 'invalid_field', `${field} is too long (max ${MAX_PATH_LEN})`);
+  if (raw.startsWith('/') || /^[A-Za-z]:/u.test(raw)) {
+    throw new ApiFailure(400, 'invalid_field', `${field} must be repo-relative: ${raw}`);
+  }
+  if (raw.includes(':')) throw new ApiFailure(400, 'invalid_field', `${field} must not carry a line number: ${raw}`);
+  const segments = raw.split('/');
+  for (const segment of segments) {
+    if (!segment || segment === '.' || segment === '..') {
+      throw new ApiFailure(400, 'invalid_field', `${field} has an empty or relative segment: ${raw}`);
+    }
+    if (!PATH_SEGMENT_RE.test(segment)) {
+      throw new ApiFailure(400, 'invalid_field', `${field} must use forward slashes without spaces or wildcards: ${raw}`);
+    }
+  }
+  return segments.join('/');
+}
+
+export function validateEvidencePaths(value: unknown): string[] {
+  if (value === undefined || value === null || value === '') return [];
+  const list = Array.isArray(value) ? value : String(value).split(',');
+  const out: string[] = [];
+  for (const item of list) {
+    if (typeof item !== 'string') throw new ApiFailure(400, 'invalid_field', 'paths must be strings');
+    if (!item.trim()) continue;
+    const path = normalizeEvidencePath(item, 'paths');
+    if (!out.includes(path)) out.push(path);
+  }
+  if (out.length > MAX_EVIDENCE_PATHS) {
+    throw new ApiFailure(400, 'invalid_field', `at most ${MAX_EVIDENCE_PATHS} paths`);
+  }
+  return out;
+}
+
+export function validateEvidenceSymbols(value: unknown): string[] {
+  if (value === undefined || value === null || value === '') return [];
+  const list = Array.isArray(value) ? value : String(value).split(',');
+  const out: string[] = [];
+  for (const item of list) {
+    if (typeof item !== 'string') throw new ApiFailure(400, 'invalid_field', 'symbols must be strings');
+    const symbol = item.trim();
+    if (!symbol) continue;
+    if (!SYMBOL_RE.test(symbol)) {
+      throw new ApiFailure(400, 'invalid_field', `symbol "${symbol}" must be an identifier (Class.method allowed, no spaces, max ${MAX_SYMBOL_LEN})`);
+    }
+    if (!out.includes(symbol)) out.push(symbol);
+  }
+  if (out.length > MAX_EVIDENCE_SYMBOLS) {
+    throw new ApiFailure(400, 'invalid_field', `at most ${MAX_EVIDENCE_SYMBOLS} symbols`);
+  }
+  return out;
+}
+
+/** Empty evidence normalizes to null: a fact either has followable pointers or none. */
+export function validateEvidence(value: unknown): FactEvidence | null {
+  if (value === undefined || value === null || value === '') return null;
+  const obj = asObject(value);
+  const paths = validateEvidencePaths(obj.paths);
+  const symbols = validateEvidenceSymbols(obj.symbols);
+  let check = '';
+  if (obj.check !== undefined && obj.check !== null && obj.check !== '') {
+    if (typeof obj.check !== 'string') throw new ApiFailure(400, 'invalid_field', 'check must be a string');
+    check = normalizeText(obj.check);
+    if (check.length > MAX_CHECK_LEN) {
+      throw new ApiFailure(400, 'invalid_field', `check is too long (max ${MAX_CHECK_LEN})`);
+    }
+  }
+  let commit = '';
+  if (obj.commit !== undefined && obj.commit !== null && obj.commit !== '') {
+    if (typeof obj.commit !== 'string') throw new ApiFailure(400, 'invalid_field', 'commit must be a string');
+    const raw = obj.commit.trim().toLowerCase();
+    if (!COMMIT_RE.test(raw)) throw new ApiFailure(400, 'invalid_field', 'commit must be 7-40 hex characters');
+    commit = raw;
+  }
+  let at = 0;
+  if (obj.at !== undefined && obj.at !== null && obj.at !== '') {
+    if (typeof obj.at !== 'number' || !Number.isFinite(obj.at) || obj.at < 0) {
+      throw new ApiFailure(400, 'invalid_field', 'at must be a millisecond timestamp');
+    }
+    at = Math.floor(obj.at);
+  }
+  if (paths.length === 0 && symbols.length === 0 && !check && !commit) return null;
+  return { paths, symbols, check, commit, at };
+}
+
 export function validateDeviceName(value: unknown): string {
   const name = asString(value, 'name', 64);
   if (!DEVICE_NAME_RE.test(name)) throw new ApiFailure(400, 'invalid_field', 'name may only contain letters, digits, ._-');
@@ -112,6 +216,7 @@ export interface FactInput {
   harness: string;
   pinned: boolean;
   importance: number;
+  evidence: FactEvidence | null;
 }
 
 export function validateFactInput(body: unknown): FactInput {
@@ -130,6 +235,7 @@ export function validateFactInput(body: unknown): FactInput {
     harness: validateHarness(obj.harness),
     pinned: validatePinned(obj.pinned),
     importance: validateImportance(obj.importance),
+    evidence: validateEvidence(obj.evidence),
   };
 }
 
@@ -139,6 +245,7 @@ export interface FactPatch {
   tags?: string[];
   pinned?: boolean;
   importance?: number;
+  evidence?: FactEvidence | null;
   supersededBy?: null;
 }
 
@@ -164,6 +271,7 @@ export function validateFactPatch(body: unknown): FactPatch {
     }
     patch.importance = obj.importance;
   }
+  if ('evidence' in obj) patch.evidence = validateEvidence(obj.evidence);
   if ('supersededBy' in obj) {
     if (obj.supersededBy !== null) {
       throw new ApiFailure(400, 'unsupported_supersede', 'a fact can only be un-superseded here; create a new fact with `supersedes`');
@@ -181,6 +289,8 @@ export interface SearchParams {
   kind: FactKind | null;
   tag: string | null;
   q: string | null;
+  /** Reverse lookup: facts whose evidence names this path. */
+  file: string | null;
   sort: SortMode;
   pinnedOnly: boolean;
   includeSuperseded: boolean;
@@ -208,6 +318,7 @@ export function parseSearchParams(params: URLSearchParams, opts: { defaultLimit?
   const kindRaw = params.get('kind');
   const tagRaw = params.get('tag');
   const qRaw = params.get('q');
+  const fileRaw = params.get('file');
   const sortRaw = params.get('sort');
   if (sortRaw && sortRaw !== 'recent' && sortRaw !== 'rank') {
     throw new ApiFailure(400, 'invalid_field', 'sort must be recent or rank');
@@ -224,6 +335,7 @@ export function parseSearchParams(params: URLSearchParams, opts: { defaultLimit?
     kind: kindRaw ? validateKind(kindRaw) : null,
     tag: tagRaw ? tagRaw.trim().toLowerCase() : null,
     q: qRaw && qRaw.trim() ? qRaw.trim() : null,
+    file: fileRaw ? normalizeEvidencePath(fileRaw, 'file') : null,
     sort,
     pinnedOnly: parseFlag(params.get('pinned')),
     includeSuperseded: parseFlag(params.get('include_superseded')),

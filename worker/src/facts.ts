@@ -3,21 +3,53 @@ import { sha256Hex } from './auth.ts';
 import { ApiFailure } from './errors.ts';
 import {
   IMPORT_BATCH,
+  MAX_EVIDENCE_PATHS,
+  MAX_EVIDENCE_SYMBOLS,
   MAX_PINNED_HINT,
   MAX_PROJECT_FACTS,
+  parseEvidence,
   toFact,
   type Device,
   type Fact,
+  type FactEvidence,
   type FactKind,
   type FactRow,
 } from './model.ts';
 import { asObject, normalizeText, validateFactInput, type FactInput, type FactPatch, type SearchParams } from './validate.ts';
 
 const FACT_COLUMNS =
-  'id, project, kind, text, hash, tags, harness, pinned, importance, superseded_by, superseded_at, device_id, device_name, created_at, deleted_at';
+  'id, project, kind, text, hash, tags, harness, pinned, importance, evidence, superseded_by, superseded_at, device_id, device_name, created_at, deleted_at';
 
-const INSERT_SQL = `INSERT INTO facts (id, project, kind, text, hash, tags, harness, pinned, importance, device_id, device_name, created_at)
-  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(project, hash) DO NOTHING`;
+const INSERT_SQL = `INSERT INTO facts (id, project, kind, text, hash, tags, harness, pinned, importance, evidence, device_id, device_name, created_at)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(project, hash) DO NOTHING`;
+
+/** Evidence is JSON text in one column: it is a pointer set, never queryable prose. */
+function evidenceColumn(evidence: FactEvidence | null): string {
+  return evidence ? JSON.stringify(evidence) : '';
+}
+
+/**
+ * The same claim recorded from a second place widens its scope (another file the
+ * convention holds in) instead of being dropped as a duplicate. Caps are kept:
+ * beyond 8 paths a fact is a global claim and should be reworded, not extended.
+ */
+function mergeEvidence(base: FactEvidence | null, extra: FactEvidence): FactEvidence {
+  const paths = [...(base?.paths ?? [])];
+  for (const path of extra.paths) {
+    if (!paths.includes(path) && paths.length < MAX_EVIDENCE_PATHS) paths.push(path);
+  }
+  const symbols = [...(base?.symbols ?? [])];
+  for (const symbol of extra.symbols) {
+    if (!symbols.includes(symbol) && symbols.length < MAX_EVIDENCE_SYMBOLS) symbols.push(symbol);
+  }
+  return {
+    paths,
+    symbols,
+    check: extra.check || base?.check || '',
+    commit: extra.commit || base?.commit || '',
+    at: Math.max(base?.at ?? 0, extra.at),
+  };
+}
 
 export function factHash(project: string, kind: FactKind, text: string): Promise<string> {
   return sha256Hex(`${project}\u0000${kind}\u0000${normalizeText(text)}`);
@@ -126,9 +158,9 @@ export async function createFact(
   const hash = await factHash(input.project, input.kind, input.text);
   const target = supersedes ? await resolveSupersedeTarget(db, supersedes, input.project) : null;
   const existing = await db
-    .prepare('SELECT id, deleted_at FROM facts WHERE project = ? AND hash = ?')
+    .prepare('SELECT id, deleted_at, evidence FROM facts WHERE project = ? AND hash = ?')
     .bind(input.project, hash)
-    .first<{ id: string; deleted_at: number | null }>();
+    .first<{ id: string; deleted_at: number | null; evidence: string }>();
   const id = existing?.id ?? crypto.randomUUID();
   const statements: DbStatement[] = [];
   if (!existing) {
@@ -145,6 +177,7 @@ export async function createFact(
           input.harness,
           input.pinned ? 1 : 0,
           input.importance,
+          evidenceColumn(input.evidence),
           device.id,
           device.name,
           now,
@@ -153,6 +186,12 @@ export async function createFact(
   } else if (existing.deleted_at !== null) {
     // Same text was pruned earlier: revive it instead of hiding it behind the unique index.
     statements.push(db.prepare('UPDATE facts SET deleted_at = NULL WHERE id = ?').bind(id));
+  } else if (input.evidence) {
+    const base = parseEvidence(existing.evidence);
+    const merged = mergeEvidence(base, input.evidence);
+    if (JSON.stringify(merged) !== JSON.stringify(base)) {
+      statements.push(db.prepare('UPDATE facts SET evidence = ? WHERE id = ?').bind(evidenceColumn(merged), id));
+    }
   }
   if (target) {
     // A retired fact must not stay "core memory": clear its pin in the same batch.
@@ -229,6 +268,11 @@ function buildFilter(query: SearchParams): { where: string; args: unknown[] } {
       clauses.push("text LIKE ? ESCAPE '\\'");
       args.push(`%${escapeLike(term)}%`);
     }
+  }
+  if (query.file) {
+    // instr() instead of LIKE: paths contain `_` and `%` often enough to matter.
+    clauses.push('instr(evidence, ?) > 0');
+    args.push(`"${query.file}"`);
   }
   if (!query.includeSuperseded) clauses.push('superseded_by IS NULL');
   if (query.pinnedOnly) clauses.push('pinned = 1');
@@ -310,6 +354,7 @@ export async function updateFact(db: Db, id: string, patch: FactPatch): Promise<
   const tags = patch.tags ?? (row.tags ? row.tags.split(',') : []);
   const pinned = patch.pinned ?? row.pinned === 1;
   const importance = patch.importance ?? row.importance;
+  const evidence = 'evidence' in patch ? evidenceColumn(patch.evidence ?? null) : row.evidence;
   const clearingSupersede = 'supersededBy' in patch;
   const supersededBy = clearingSupersede ? null : row.superseded_by;
   const supersededAt = clearingSupersede ? null : row.superseded_at;
@@ -323,9 +368,9 @@ export async function updateFact(db: Db, id: string, patch: FactPatch): Promise<
   }
   await db
     .prepare(
-      'UPDATE facts SET text = ?, kind = ?, tags = ?, hash = ?, pinned = ?, importance = ?, superseded_by = ?, superseded_at = ? WHERE id = ?',
+      'UPDATE facts SET text = ?, kind = ?, tags = ?, hash = ?, pinned = ?, importance = ?, evidence = ?, superseded_by = ?, superseded_at = ? WHERE id = ?',
     )
-    .bind(text, kind, tags.join(','), hash, pinned ? 1 : 0, importance, supersededBy, supersededAt, id)
+    .bind(text, kind, tags.join(','), hash, pinned ? 1 : 0, importance, evidence, supersededBy, supersededAt, id)
     .run();
   return toFact({
     ...row,
@@ -335,6 +380,7 @@ export async function updateFact(db: Db, id: string, patch: FactPatch): Promise<
     hash,
     pinned: pinned ? 1 : 0,
     importance,
+    evidence,
     superseded_by: supersededBy,
     superseded_at: supersededAt,
   });
@@ -402,6 +448,7 @@ export async function importFacts(db: Db, device: Device, items: unknown[], now:
         item.input.harness,
         item.input.pinned ? 1 : 0,
         item.input.importance,
+        evidenceColumn(item.input.evidence),
         device.id,
         device.name,
         item.createdAt,
