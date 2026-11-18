@@ -194,24 +194,7 @@ gh secret set CLOUDFLARE_ACCOUNT_ID --body "56cf8c921cb267fdae6d1f401bff12e2"
 gh secret set CLOUDFLARE_API_TOKEN      # Workers Scripts:Edit + D1:Edit
 ```
 
-发布走 **Trusted Publishing（OIDC）**，不需要 `NPM_TOKEN`。但包首次发布前 npm 侧还不存在条目，必须先手动发一次：
-
-```bash
-# 首次发布：一次性 Bypass-2FA Granular Access Token
-# 1) npmjs.com/settings/yidasanqian/tokens → Generate New Token → Granular Access Token
-#    ✔ Bypass two-factor authentication
-#    Packages and scopes: All Packages · Read and write (publish and stage)
-#    Expiration: 1 day
-cd cli
-npm config set //registry.npmjs.org/:_authToken=<token>
-npm publish --access public
-npm config delete //registry.npmjs.org/:_authToken
-# 2) 发布成功后立即在 npm 删除该 token
-```
-
-> `cli/.npmrc` 与 `publishConfig.registry` 都固定到 `https://registry.npmjs.org/`。
->
-> npm 要求「账号 2FA 或带 **Bypass 2FA** 的 Granular Token」二选一。实测 `npm login` 得到的 web token 即使加 `--otp` 仍返回 `E403`，所以首次发布直接用一次性 bypass token 最省事；若浏览器里的 2FA 能正常完成，也可以 `npm login && npm publish` 走 OTP。
+发布完全走 **Trusted Publishing（OIDC）**，不使用也不保存 `NPM_TOKEN`，没有任何手动 `npm publish` 步骤：打 tag → `release` workflow → npm。
 
 然后配置 `npmjs.com/package/@yidasanqian/loam/settings → Trusted Publisher → GitHub Actions`：
 
@@ -228,9 +211,9 @@ npm config delete //registry.npmjs.org/:_authToken
 git tag v0.1.0 && git push --tags
 ```
 
-> 若 tag 发布在 `npm publish` 报 `404 Not Found - PUT https://registry.npmjs.org/@yidasanqian%2floam`，是 npm 侧 Trusted Publisher 未配置或与仓库 / workflow 不匹配，不是代码问题：先在 npm 包设置里配好 `release.yml`，再用新版本号重发。`0.1.1` 就是该情况下的手动 granular-token 发布（无 provenance）。
+> 若 tag 发布在 `npm publish` 报 `404 Not Found - PUT https://registry.npmjs.org/@yidasanqian%2floam`，是 npm 侧 Trusted Publisher 未配置或与仓库 / workflow 不匹配，不是代码问题：先在 npm 包设置里配好 `release.yml`，再用新版本号重打 tag；不要用 token 手动发布。
 >
-> `--provenance` 只支持 public 源仓库。仓库现为 public，后续 tag 发布会自动带 provenance；`0.1.1` / `0.1.2` 为手动发布（无 provenance）。若以后改回 private，workflow 会自动去掉 provenance。
+> `--provenance` 只支持 public 源仓库。仓库现为 public，后续 tag 发布会自动带 provenance；`0.1.1` / `0.1.2` 早于该配置，未带 provenance。若以后改回 private，workflow 会自动去掉 provenance。
 
 `deploy` 用 `concurrency` 串行；`release` 依赖 npm provenance（`id-token: write`）。
 

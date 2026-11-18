@@ -1,6 +1,6 @@
 {
   "name": "@yidasanqian/loam",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "loam: single-user project memory shared across devices and agent harnesses",
   "license": "Apache-2.0",
   "repository": {

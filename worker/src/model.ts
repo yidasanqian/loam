@@ -7,7 +7,7 @@ export type Scope = (typeof SCOPES)[number];
 export const SORT_MODES = ['recent', 'rank'] as const;
 export type SortMode = (typeof SORT_MODES)[number];
 
-export const VERSION = '0.1.2';
+export const VERSION = '0.1.3';
 
 /** Hard limits, asserted in code (SCOPE §量化边界). */
 export const MAX_TEXT_BYTES = 4096;

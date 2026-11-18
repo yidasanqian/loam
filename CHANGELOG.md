@@ -2,11 +2,18 @@
 
 All notable changes to this project are documented here. Format: [Keep a Changelog](https://keepachangelog.com/), SemVer.
 
+## [0.1.3] - 2026-11-18
+
+### Changed
+
+- 发布完全走 GitHub Actions：tag → `release` workflow → OIDC Trusted Publishing + provenance；移除了手动 token 发布说明，不使用也不保存 `NPM_TOKEN`。
+- 仓库改为 public；`release` workflow 对 public 仓库带 provenance、private 仓库自动去掉，当前发布走 provenance。
+
 ## [0.1.2] - 2026-11-18
 
 ### Changed
 
-- release workflow 在 `npm publish` 前打印 OIDC claims（`aud` / `repository` / `job_workflow_ref` / `ref` / `environment` 等），用于核对 Trusted Publisher 配置。私有仓库带 `--provenance` 会被 npm 以 `E422` 拒绝，workflow 因此对 private 仓库改为不带 provenance、公开仓库自动带；0.1.2 为本地 granular-token 手动发布（无 provenance）。
+- release workflow 在 `npm publish` 前打印 OIDC claims（`aud` / `repository` / `job_workflow_ref` / `ref` / `environment` 等），用于核对 Trusted Publisher 配置。私有仓库带 `--provenance` 会被 npm 以 `E422` 拒绝，workflow 因此对 private 仓库改为不带 provenance、公开仓库自动带；0.1.2 发布时仓库为 private，未带 provenance。
 
 ## [0.1.1] - 2026-11-18
 

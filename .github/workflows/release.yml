@@ -43,9 +43,9 @@ jobs:
       - run: pnpm -r test
       - run: pnpm --filter @loam/worker run test:offline
       - run: pnpm --filter @yidasanqian/loam build
-      # Trusted Publishing (OIDC): no NPM_TOKEN. After the first manual publish,
-      # configure npmjs.com/package/@yidasanqian/loam/settings → Trusted Publisher →
-      # GitHub Actions: yidasanqian/loam, workflow release.yml, environment empty.
+      # Trusted Publishing (OIDC): no token and no manual publish. The package is
+      # configured at npmjs.com/package/@yidasanqian/loam/settings → Trusted Publisher
+      # → GitHub Actions: yidasanqian/loam, workflow release.yml, environment empty.
       - name: Publish
         working-directory: cli
         run: |

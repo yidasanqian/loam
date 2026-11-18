@@ -194,24 +194,7 @@ gh secret set CLOUDFLARE_ACCOUNT_ID --body "56cf8c921cb267fdae6d1f401bff12e2"
 gh secret set CLOUDFLARE_API_TOKEN      # Workers Scripts:Edit + D1:Edit
 ```
 
-Publishing uses **Trusted Publishing (OIDC)** and needs no `NPM_TOKEN`. The package must exist on npm before OIDC can take over, so the first publish is manual:
-
-```bash
-# one-off Bypass-2FA granular access token
-# 1) npmjs.com/settings/yidasanqian/tokens → Generate New Token → Granular Access Token
-#    ✔ Bypass two-factor authentication
-#    Packages and scopes: All Packages · Read and write (publish and stage)
-#    Expiration: 1 day
-cd cli
-npm config set //registry.npmjs.org/:_authToken=<token>
-npm publish --access public
-npm config delete //registry.npmjs.org/:_authToken
-# 2) delete the token on npm immediately afterwards
-```
-
-> `cli/.npmrc` and `publishConfig.registry` both pin `https://registry.npmjs.org/`.
->
-> npm requires either account 2FA or a granular token with **Bypass 2FA**. A web token from `npm login` still returns `E403` with `--otp`, so the one-off bypass token is the shortest path; interactive 2FA in the browser also works.
+Publishing uses **Trusted Publishing (OIDC)** only: no `NPM_TOKEN`, no manual `npm publish` step. Push a tag → the `release` workflow publishes to npm.
 
 Then configure `npmjs.com/package/@yidasanqian/loam/settings → Trusted Publisher → GitHub Actions`:
 
@@ -228,9 +211,9 @@ After that, pushing a tag publishes with provenance from OIDC:
 git tag v0.1.0 && git push --tags
 ```
 
-> If a tag release fails at `npm publish` with `404 Not Found - PUT https://registry.npmjs.org/@yidasanqian%2floam`, the npm-side Trusted Publisher is missing or does not match this repo/workflow; it is not a code problem. Configure `release.yml` under the package settings and publish a new version. `0.1.1` was published manually with a granular token (no provenance) for exactly this reason.
+> If a tag release fails at `npm publish` with `404 Not Found - PUT https://registry.npmjs.org/@yidasanqian%2floam`, the npm-side Trusted Publisher is missing or does not match this repo/workflow; it is not a code problem. Configure `release.yml` under the package settings and tag a new version; do not publish with a token.
 >
-> `--provenance` only supports public source repositories. This repo is now public, so tag releases publish with provenance. `0.1.1` / `0.1.2` were published manually (no provenance); if the repo becomes private again, the workflow drops provenance automatically.
+> `--provenance` only supports public source repositories. This repo is now public, so tag releases publish with provenance. `0.1.1` / `0.1.2` predate this configuration and carry no provenance; if the repo becomes private again, the workflow drops provenance automatically.
 
 `deploy` is serialized with `concurrency`; `release` relies on npm provenance (`id-token: write`).
 
