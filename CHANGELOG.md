@@ -2,6 +2,25 @@
 
 All notable changes to this project are documented here. Format: [Keep a Changelog](https://keepachangelog.com/), SemVer.
 
+## [0.2.0] - 2026-11-18
+
+### Added
+
+- `loam onboard`：一条命令完成登录 + DSH / Claude Code / Codex 接线；`--server` 必填，`--admin-token-file` / `--proxy` 可按需覆盖。
+- README 拆分「给用户」与「给开发者」两段；首屏加 npm / CI / license / node 徽章，工作台截图改为内联展示。
+- `LOAM_SKILL_SOURCE`：指向本地仓库即可验证 skill 接线，无需先 push。
+- 工作台移动端适配（≤640px）：操作按钮独立成行、四个 tab 等宽、泳道 91% 横滑、捕获条两行、输入 16px 防 iOS 缩放、安全区内边距；390×844 无横向溢出，移动端截图按真实视口重拍。
+- README 增加 Deploy to Cloudflare 一键部署按钮，指向 `worker/` 子目录；`worker/package.json` 的 `deploy` 改为「建表 + 部署」，按钮流程会自动开 D1、预填 `ADMIN_TOKEN`。
+
+### Changed
+
+- README 首屏改为转化版：价值主张 + 一行接入 + 真实 CLI 示例 + 「不是又一个 memory 工具」+ 支持范围矩阵。
+- README 重排：自托管拆成「一键部署 / 命令行」两种方式；部署细节移到 `docs/DEPLOY.md`，里程碑与发布表移到 `docs/STATUS.md`，CI 与发布细节并入 `CONTRIBUTING.md`。
+- 移除仓库内置的部署地址：`onboard` 的 `--server` 改为必填，README / docs 的示例统一用 `loam.example.workers.dev`；deploy 冒烟测试改读仓库变量 `LOAM_URL`，未配置时跳过。
+- skill 接线改由 Skills CLI 负责：`loam install` 调用 `npx skills add yidasanqian/loam`，唯一副本落在 `~/.agents/skills/loam`，各 harness 目录链接过去；DSH 与 Codex 直接读 `~/.agents/skills`，不需要单独接线。不再复制 `SKILL.md`。
+- `cli/skills/SKILL.md` 增加 `name` / `description` frontmatter，仓库因此可作为 Skills CLI 源；npm 包不再携带 `skills` 目录。
+- `loam uninstall` 增加 `npx skills remove loam -g` 与链接清理；install.json 新增 `skill` 段，旧 `file` 记录仍可回滚。
+
 ## [0.1.3] - 2026-11-18
 
 ### Changed

@@ -47,4 +47,30 @@ pnpm -r test
 
 - 一个 commit 一个最小功能单元；信息写「为什么」，不写「改了哪些文件」。
 - 不提交 `~/.loamrc.json`、`.dev.vars`、outbox、缓存、`dist/`。
-- 发布：首次用一次性 **Bypass 2FA** Granular Token（`npm config set //registry.npmjs.org/:_authToken=…` → `cd cli && npm publish --access public` → 删除 token）。`npm login` 的 web token 即使带 `--otp` 也可能 E403。首次发布后配置 Trusted Publisher，后续 tag 走 OIDC，免 token/OTP。
+- 发布见下方「CI 与发布」，只走 OIDC，不使用也不保存 token。
+
+## CI 与发布
+
+- `push` / PR → `ci`：typecheck、Worker HTTP、CLI、offline、许可证、`wrangler deploy --dry-run`
+- `push main`（`worker/**`）→ `deploy`：D1 schema 校验 → `wrangler deploy` → `/health` 冒烟
+- `tag v*` → `release`：全量测试 → `pnpm build` → `npm publish --provenance --access public`
+
+仓库变量与 secrets（只设一次）：
+
+```bash
+gh variable set CF_DEPLOY --body true
+gh variable set LOAM_URL --body "https://你的-worker.workers.dev"   # 冒烟测试地址，不写进仓库
+gh secret set CLOUDFLARE_ACCOUNT_ID --body "..."
+gh secret set CLOUDFLARE_API_TOKEN      # Workers Scripts:Edit + D1:Edit
+```
+
+发布走 **Trusted Publishing（OIDC）**，不使用也不保存 `NPM_TOKEN`。npm 包设置里配置：
+
+| 字段 | 值 |
+|---|---|
+| Organization or user | `yidasanqian` |
+| Repository | `loam` |
+| Workflow filename | `release.yml` |
+| Environment | 留空 |
+
+之后 `git tag v0.1.0 && git push --tags` 即自动发布。`--provenance` 只支持 public 源仓库；改回 private 时 workflow 会自动去掉 provenance。`LOAM_URL` 未配置时冒烟测试跳过。

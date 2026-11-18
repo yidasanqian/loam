@@ -2,142 +2,79 @@
 
 **简体中文** · [English](README.en.md)
 
-单人、多设备、多 harness（DSH / Claude Code / Codex）共享的**项目级长期记忆**。
-一条命令接入，CLI + skill 调用，Cloudflare 免费层承载，不做 MCP。仓库内置一个同源**记忆工作台**（四泳道 + 原理图 + 中英双语界面）。
+[![npm version](https://img.shields.io/npm/v/@yidasanqian%2Floam)](https://www.npmjs.com/package/@yidasanqian/loam)
+[![npm downloads](https://img.shields.io/npm/dm/@yidasanqian%2Floam)](https://www.npmjs.com/package/@yidasanqian/loam)
+[![CI](https://github.com/yidasanqian/loam/actions/workflows/ci.yml/badge.svg)](https://github.com/yidasanqian/loam/actions/workflows/ci.yml)
+[![license](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
+[![node](https://img.shields.io/node/v/@yidasanqian%2Floam)](package.json)
 
-- 命令：`loam`　发布名：`@yidasanqian/loam`
-- 后端：Workers + D1（Hono 路由，per-device Bearer，原生限流）
-- 边界与取舍：见 [docs/SCOPE.md](docs/SCOPE.md) 与 [docs/DECISIONS/](docs/DECISIONS/)
-
-## 为什么
-
-多种 harness 各自有会话记忆，跨设备的项目上下文互不可见。loam 把「决策 / 坑 / 约定 / 事实」抽成一行文本 + 元数据，按 project 隔离、按 hash 幂等、按设备鉴权，任何一端写入，另一端开工前 `loam search` 即可命中。
-
-```
-harness (DSH / Claude Code / Codex)
-   │  AGENTS.md 标记块 + SKILL.md
-   ▼
-loam CLI ──HTTPS/JSON──► Worker (Hono) ──► D1 (devices, facts)
-   │                         └─ ratelimits binding
-   ├─ ~/.loamrc.json        0600，server + device token
-   ├─ ~/.loam/outbox.jsonl  断网写入
-   ├─ ~/.loam/cache/        5 分钟读取缓存
-   └─ ~/.loam/install.json  安装清单，供 doctor / uninstall
-```
-
-## 记忆模型
-
-四类决定「这是什么」，三个属性决定「它现在还算不算数、排多前」：
-
-| 维度 | 取值 | 作用 |
-|---|---|---|
-| `kind` | 决策 / 坑 / 约定 / 事实 | 页面上的四列；召回时的语义 |
-| `pinned` | 0/1 | 常驻：注入与复盘优先，`prune` 不删 |
-| `importance` | 1..5（默认 3） | 排序权重，写方给出 |
-| `superseded_by` | 同 project 的新行 id | 事实级时态：旧条目退出默认召回，保留历史 |
-
-- 排序 `sort=rank`：`pinned DESC, importance DESC, created_at DESC`，只出 top-N；分页仍按时间 keyset。
-- 取代只能通过 `POST {supersedes}` 建立，PATCH 仅能取消，因此不会成环。
-- 页面「原理」视图把这条链路画成一张图，并与代码逐项对应（见 [docs/UI.md](docs/UI.md)）。
-
-## 快速开始（本地）
+**一份项目记忆，Claude Code / Codex / DSH 共用。**
+一行文本一条事实，注入约 200 token；不装 MCP、不跑向量库、不做自动转录。后端跑在 Cloudflare 免费层，也可以一键部署到你自己的账号。
 
 ```bash
-pnpm install
-cd worker
-cp .dev.vars.example .dev.vars            # 写入 ADMIN_TOKEN
-pnpm dlx wrangler d1 execute loam --local --file=./schema.sql   # 全新库
-# 已有 0.1 的库只跑迁移（不要再跑 schema.sql）：
-# pnpm dlx wrangler d1 execute loam --local --file=./migrations/0002-memory-shape.sql
-pnpm dev                                   # http://127.0.0.1:8787
-
-# 另开终端
-cd ../cli
-pnpm build
-LOAM_ADMIN_TOKEN=... node dist/bin.js login --server http://127.0.0.1:8787 --name win-desktop
-node dist/bin.js add "D1 is the source of truth" --kind decision --importance 5
-node dist/bin.js add "Use Hono plus D1" --kind decision --supersedes <旧条目 id>
-node dist/bin.js search "source"
+npx @yidasanqian/loam onboard --server https://loam.example.workers.dev --name 我的笔记本
 ```
 
-## 部署（Cloudflare）
+一条命令完成登录、写各端调用约定、装 skill。首次注册需要 `ADMIN_TOKEN`：
 
 ```bash
-cd worker
-pnpm dlx wrangler d1 create loam           # 把 database_id 填进 wrangler.toml
-# 二选一：全新库跑 schema.sql；已有 0.1 的库只跑迁移。
-pnpm dlx wrangler d1 execute loam --file=./schema.sql --remote
-# pnpm dlx wrangler d1 execute loam --file=./migrations/0002-memory-shape.sql --remote
-pnpm dlx wrangler secret put ADMIN_TOKEN   # 只在 /v1/activate 使用
-pnpm deploy
+LOAM_ADMIN_TOKEN=... npx @yidasanqian/loam onboard --server https://loam.example.workers.dev --name 我的笔记本
 ```
 
-`deploy` workflow 只**校验** schema（缺列直接失败），不会自动改库；迁移按上面的命令先手动执行。升级前先 `loam export --out backup.ndjson`，或 `wrangler d1 export loam --remote --output backup.sql`。
+> `onboard` 自 0.2 起提供。npm 上还是 0.1.3 时，用 `loam install -y` + `loam login --server … --name …` 达到同样效果。
+> 还没有后端？先看下面的[一键部署](#方式-a一键部署)，再回来跑这行。
 
-参考部署：`https://loam.sanqian.workers.dev`。`ADMIN_TOKEN` 只用于发放设备 token；设备拿到 `loam_<id8>_<32B>` 后独立鉴权，撤销单台不影响其它设备。
+```text
+$ loam add "Bearer tokens are per-device" --kind decision --tags auth
++ 3f9c2a1e [decision] loam
 
-升级前先 `loam export --out backup.ndjson`。新列是纯增量的，旧代码忽略它们，回滚代码不需要回滚 schema。
-
-`deploy` workflow 只校验 schema，不自动迁移：先跑 `worker/migrations/0002-memory-shape.sql --remote`，再 push 或手动触发 deploy。
-
-中国大陆直连 `workers.dev` 可能超时（实测需代理）。登录时把代理写进配置，之后 CLI 自动使用（Node ≥24）：
-
-```bash
-loam login --server https://loam.sanqian.workers.dev --name win-desktop --proxy http://127.0.0.1:7890
-loam search "keyword"
+$ loam search "auth token"
+- [decision] Bearer tokens are per-device (claude · 2026-11-18 · 3f9c2a1e · 4/5)
 ```
 
-## 接入三端
+> 示例输出。召回默认 5 条、每行 ≤100 字符；注入给 harness 的只有前 3 条。
 
-```bash
-loam install              # 探测 ~/.dsh、~/.claude、~/.codex，交互勾选
-loam install --only codex --dry-run
-loam install --with-hooks # 额外注册 Claude Code UserPromptSubmit hook（默认不装）
-loam doctor               # token / skill / 标记块 / 最近 recall 自检
-loam uninstall            # 按 install.json 精确回滚
-```
+**看界面**：[工作台](#记忆工作台) · **部署**：[一键](#方式-a一键部署) / [命令行](#方式-b命令行) · **文档**：[docs/](docs/)
 
-`install` 只动两处：仓库 `AGENTS.md` 的 `<!-- loam:start -->…<!-- loam:end -->` 标记块，以及各 harness 的指令文件与 skill 目录；每次写入都记进 `~/.loam/install.json`。
+## 不是又一个 memory 工具
 
-升级 CLI 后要重新接线，否则本地 skill 仍是旧内容：
+- **不是 MCP server**：调用是一个 CLI + skill，不需要常驻进程，不占工具列表；每次注入约 200 token。
+- **不是自动转录 / 向量库**：写什么由你决定，一行一条；去重、取代、排序在写入时确定，召回可解释。
+- **不是团队协作平台**：单用户、多设备；token 按设备发，撤销一台不影响其它设备，数据在你自己的 D1 里。
+- **不是只服务一个 harness**：同一份记忆，Claude Code、Codex、DSH 都能写、都能读。
 
-```bash
-loam upgrade        # 查看 CLI / npm 最新 / 接线版本
-npm i -g @yidasanqian/loam@latest
-loam install        # 刷新 skill 与 AGENTS.md 块
-loam doctor         # version 项会指出接线版本漂移
-```
+## 三步开始
 
-## CLI 一览
+1. **有后端**：点[一键部署](#方式-a一键部署)，或按[命令行](#方式-b命令行)自己 `wrangler deploy`。
+2. **接三端**：跑上面的 `onboard`；已有 token 时它会跳过登录，只刷新接线。
+3. **用起来**：
 
-| 命令 | 作用 |
-|---|---|
-| `login --server URL --name NAME` | 注册/轮换本机 token，写入 `~/.loamrc.json` |
-| `add "<text>" --kind … --importance 1..5 [--pin] [--supersedes id]` | 记录事实，`project + kind + text` 幂等 |
-| `search "<关键词>" [--sort rank\|recent]` | 默认 5 条、≤6 行、每行 ≤100 字符；默认按常驻/热度排序 |
-| `show <id\|前缀>` / `list` | 单条详情（含常驻/取代链）/ 最近 N 条 |
-| `devices [list\|revoke\|rotate]` | 设备与 token 生命周期 |
-| `upgrade` | 检查 npm 最新版与接线版本，给出升级/刷新命令 |
-| `export` / `import` | NDJSON 备份与恢复（含 pinned/importance） |
-| `flush` | 补发离线 outbox |
-| `prune --older 180d` | 软删除过期事实（跳过常驻） |
+   ```bash
+   loam search "关键词"
+   loam add "用 D1 作为唯一事实源" --kind decision --importance 4
+   ```
 
-完整参数、退出码与环境变量见 [docs/CLI.md](docs/CLI.md)。
+接好之后不用记命令：harness 会在开工前 `loam search`、收尾时 `loam add`。自检 `loam doctor`，回滚 `loam uninstall`，只刷 skill 用 `npx skills update loam`。
+
+## 支持范围
+
+| harness | 调用约定 | skill | hook |
+|---|---|---|---|
+| Claude Code | `~/.claude/CLAUDE.md` 标记块 | `npx skills add` 链接到 `~/.agents/skills` | 可选 `UserPromptSubmit` |
+| Codex | `~/.codex/AGENTS.md` 标记块 | 直接读 `~/.agents/skills` | — |
+| DSH | `~/.dsh/AGENTS.md` 标记块 | 直接读 `~/.agents/skills` | Cordis 插件（v1.1） |
+| 其它 Skills CLI agent | 手动引用 | `npx skills add yidasanqian/loam` | — |
+
+仓库自己的 `AGENTS.md` 也会写入标记块，所以项目级约定跟着仓库走。
 
 ## 记忆工作台
 
-部署后打开 `https://loam.sanqian.workers.dev/`，粘贴 `~/.loamrc.json` 里的 token：
+打开你的 worker 地址，粘贴 `~/.loamrc.json` 里的 token：
 
-- **工作台**：决策 / 坑 / 约定 / 事实四列，各自滚动；整页不滚动。拖卡片到另一列即改类型。
-- **检视抽屉**：全文、来源、常驻、重要度 1–5、取代状态、修订与删除（6 秒可撤销），不打断列表。
-- **捕获条**：底部常驻，project 继承当前项目；从检视栏「标为过时」进入时预填 `supersedes`。
-- **时间轴**：今天 / 近 7 天 / 近 30 天 / 更早，四段并列。
-- **复盘**：一次一张，改类型 / 固定 / 修订 / 删除 / 跳过，适合一圈扫完。
-- **原理**：一张记忆模型工作原理图（写入 → 形状 → 读取 → 维护），与代码逐项对应，并显示实时计数。
-- **双语**：界面按浏览器语言自动选择中文或英文（`localStorage` → `navigator.languages` → `en`），顶栏可切换。
-
-<details>
-<summary>界面预览（3 张，点开）</summary>
+- **工作台**：决策 / 坑 / 约定 / 事实四列，拖卡片即改类型，整页不滚动。
+- **检视 / 复盘**：全文、来源、常驻、重要度、取代链；复盘一次一张。
+- **时间轴 / 原理**：四段时间轴；一张与代码对应的记忆模型图。
+- 界面中英双语，按浏览器语言切换。
 
 **工作台 · 1440×900**
 
@@ -151,81 +88,54 @@ loam doctor         # version 项会指出接线版本漂移
 
 ![loam 移动端：单列横向 snap 与底部捕获](docs/images/loam-mobile.png)
 
-</details>
+页面由 Workers Assets 托管（`worker/public/`），同源调用 `/v1/*`；无构建链、无框架、无第三方前端依赖。
 
-页面由 Workers Assets 托管（`worker/public/`），同源调用 `/v1/*`；token 只存当前浏览器的 localStorage，CSP 禁止内联脚本/样式与外部资源。无构建链、无框架、无第三方前端依赖。
+## 自托管
 
-## 开发与验证
+两种方式，任选其一。完整步骤、限制与备份见 [docs/DEPLOY.md](docs/DEPLOY.md)。
 
-```bash
-pnpm typecheck
-pnpm -r test                     # worker: vitest 官方池；cli: node:test
-pnpm --filter @loam/worker test:offline   # 零依赖：node:sqlite 跑真实 SQL
-pnpm check:licenses              # 许可证白名单
-```
+### 方式 A：一键部署
 
-离线套件不需要 workerd：`worker/test/offline` 用 `node:sqlite` 实现 D1 形状的 adapter，直接跑 schema、幂等、取代、rank 与软删除。
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/yidasanqian/loam/tree/main/worker)
 
-页面手测清单（10 项）见 [docs/UI.md](docs/UI.md)；本地样例数据用 `scripts/seed-dev.mjs`。
+点按钮：Cloudflare 把 `worker/` 复制到你的 GitHub、创建 Worker 与 D1、提示填 `ADMIN_TOKEN`，然后按 `deploy` 脚本先建表再部署，并接上 Workers Builds。之后只需绑定域名（可选）并跑 `loam login`。
 
-## 状态
-
-| 阶段 | 状态 |
-|---|---|
-| M0 骨架 + 边界 + ADR | 完成 |
-| M1 Worker + 鉴权 + facts CRUD + 限流 | 完成；HTTP 23/23 |
-| M2 CLI MVP + outbox + 裁剪 | 完成；CLI 32/32 |
-| M2.5 installer + doctor + uninstall | 完成 |
-| M3 三端接线 / M4 双机验收 | 三端无头会话实测命中；第二台物理机未联调 |
-| M5 CI / license / 发布 | `0.1.0`–`0.1.3` 已发布；CI + 自动部署 + 迁移防回归通过 |
-| 记忆工作台 + 记忆形状（ADR-0006） | `0.1.3` 已发布；离线 17/17、HTTP 23/23、CLI 38/38 |
-
-## GitHub CI/CD
-
-- `push` / PR → `ci`：typecheck、Worker HTTP、CLI、offline、许可证、`wrangler deploy --dry-run`
-- `push main`（`worker/**`）→ `deploy`：D1 schema → `wrangler deploy` → `/health` 冒烟；由仓库变量 `CF_DEPLOY=true` 开启
-- `tag v*` → `release`：全量测试 → `pnpm build` → `npm publish --provenance --access public`
-
-首次启用自动部署（仓库 secrets 只设一次）：
+### 方式 B：命令行
 
 ```bash
-gh variable set CF_DEPLOY --body true
-gh secret set CLOUDFLARE_ACCOUNT_ID --body "56cf8c921cb267fdae6d1f401bff12e2"
-gh secret set CLOUDFLARE_API_TOKEN      # Workers Scripts:Edit + D1:Edit
+cd worker
+pnpm dlx wrangler d1 create loam
+pnpm dlx wrangler d1 execute loam --file=./schema.sql --remote   # 全新库；已有库改跑 migrations/
+pnpm dlx wrangler secret put ADMIN_TOKEN
+pnpm run deploy
 ```
 
-发布完全走 **Trusted Publishing（OIDC）**，不使用也不保存 `NPM_TOKEN`，没有任何手动 `npm publish` 步骤：打 tag → `release` workflow → npm。
+已有 0.1 的库只跑迁移；备份、回滚与代理设置见 [docs/DEPLOY.md](docs/DEPLOY.md)。
 
-然后配置 `npmjs.com/package/@yidasanqian/loam/settings → Trusted Publisher → GitHub Actions`：
-
-| 字段 | 值 |
-|---|---|
-| Organization or user | `yidasanqian` |
-| Repository | `loam` |
-| Workflow filename | `release.yml` |
-| Environment | 留空 |
-
-之后打 tag 即自动发布，provenance 由 OIDC 生成：
+## 给开发者
 
 ```bash
-git tag v0.1.0 && git push --tags
+pnpm install
+pnpm typecheck && pnpm -r test
+pnpm check:licenses
 ```
 
-> 若 tag 发布在 `npm publish` 报 `404 Not Found - PUT https://registry.npmjs.org/@yidasanqian%2floam`，是 npm 侧 Trusted Publisher 未配置或与仓库 / workflow 不匹配，不是代码问题：先在 npm 包设置里配好 `release.yml`，再用新版本号重打 tag；不要用 token 手动发布。
->
-> `--provenance` 只支持 public 源仓库。仓库现为 public，tag 发布自动带 provenance；`0.1.1` / `0.1.2` 未带 provenance，`0.1.3` 起由 CI 发布并带 provenance。若以后改回 private，workflow 会自动去掉 provenance。
-
-`deploy` 用 `concurrency` 串行；`release` 依赖 npm provenance（`id-token: write`）。
+本地 worker / CLI 调试、代码约定、CI 与发布：[CONTRIBUTING.md](CONTRIBUTING.md)。
+架构见 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)，进度见 [docs/STATUS.md](docs/STATUS.md)。
 
 ## 文档
 
-- [docs/SCOPE.md](docs/SCOPE.md) 范围内的能力与量化边界
-- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) 组件、数据流、存储
-- [docs/UI.md](docs/UI.md) 工作台版式、原理图与代码映射、手测清单
-- [docs/AUTH.md](docs/AUTH.md) 设备 token、撤销、限流
-- [docs/CLI.md](docs/CLI.md) 命令参考
+- [docs/DEPLOY.md](docs/DEPLOY.md) 两种部署方式、迁移、备份、代理
 - [docs/INSTALL.md](docs/INSTALL.md) 三端接线与回滚
-- [docs/DEPENDENCIES.md](docs/DEPENDENCIES.md) 依赖与许可证策略
+- [docs/CLI.md](docs/CLI.md) 命令参考
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) 组件、数据流、存储
+- [docs/UI.md](docs/UI.md) 工作台版式、原理图映射、手测清单
+- [docs/AUTH.md](docs/AUTH.md) 设备 token、撤销、限流
+- [docs/SCOPE.md](docs/SCOPE.md) 范围与量化边界
+- [docs/STATUS.md](docs/STATUS.md) 里程碑与已发布版本
+- [CONTRIBUTING.md](CONTRIBUTING.md) 开发、测试、CI 与发布
 - [SECURITY.md](SECURITY.md) 明文边界与报告方式
+
+如果 loam 对你有用，给个 star；问题和想法走 [Issues](https://github.com/yidasanqian/loam/issues)。
 
 Apache-2.0。计划原文见 [PLAN.md](PLAN.md)。

@@ -6,7 +6,7 @@
 
 | 层 | v1 | 内容 |
 |---|---|---|
-| L1 | 必做 | `npx @yidasanqian/loam install`：探测 → 勾选 → 逐端接线；`--dry-run`、`-y`、`--only` |
+| L1 | 必做 | `npx @yidasanqian/loam onboard`：登录 + 探测 → 勾选 → 逐端接线；`install` 负责后半段，支持 `--dry-run`、`-y`、`--only` |
 | L2 | 开源后 | npm -g / Homebrew tap / winget-scoop |
 | L3 | 可选 | DSH Cordis 插件、Claude marketplace 条目，壳内只调用 installer |
 
@@ -14,10 +14,11 @@
 
 | 端 | 通用面（必写） | 专用面 | 探测信号 | 自动触发 |
 |---|---|---|---|---|
-| DSH | 仓库 `AGENTS.md` 块 | `$DSH_HOME/AGENTS.md` 块；`skills/loam/SKILL.md` | `DSH_HOME` 或 `~/.dsh` | Cordis hook（v1.1） |
-| Claude Code | 仓库 `AGENTS.md` 块 | `~/.claude/CLAUDE.md` 块；`~/.claude/skills/loam/SKILL.md` | `~/.claude`（或 `CLAUDE_CONFIG_DIR`） | UserPromptSubmit hook（可选） |
+| DSH | 仓库 `AGENTS.md` 块 | `$DSH_HOME/AGENTS.md` 块；skill：`~/.agents/skills/loam`（DSH 直接读） | `DSH_HOME` 或 `~/.dsh` | Cordis hook（v1.1） |
+| Claude Code | 仓库 `AGENTS.md` 块 | `~/.claude/CLAUDE.md` 块；`~/.claude/skills/loam` 由 `npx skills add` 链接 | `~/.claude`（或 `CLAUDE_CONFIG_DIR`） | UserPromptSubmit hook（可选） |
 | Codex | 仓库 `AGENTS.md` 块 | `~/.codex/AGENTS.md` 块 | `CODEX_HOME` 或 `~/.codex` | Codex hooks（版本未定，v1 不装） |
 
+- skill 不复制：`loam install` 调用 `npx skills add yidasanqian/loam --skill loam -g -y --agent <claude-code,codex>`，Skills CLI 在 `~/.agents/skills/loam` 维护唯一副本，各 agent 目录链接过去；DSH 与 Codex 的 skill 目录同为 `~/.agents/skills`，因此两者直接读同一份副本，不需要单独接线。
 - 探测不到任何目录 → 报错并提示用 `--only`。
 - 交互环境用 `@clack/prompts` 多选；`-y` / `--dry-run` / 非 TTY 用全部探测结果。
 - 路径全部 `os.homedir()` + `path.join`，不写死分隔符与盘符。
@@ -47,13 +48,23 @@
   "harnesses": ["dsh", "claude", "codex"],
   "files": [
     { "path": "…/AGENTS.md", "kind": "block", "harness": null, "created": false },
-    { "path": "…/.claude/skills/loam/SKILL.md", "kind": "file", "harness": "claude", "created": true },
     { "path": "…/.claude/settings.json", "kind": "hooks", "harness": "claude", "created": true }
-  ]
+  ],
+  "skill": {
+    "source": "yidasanqian/loam",
+    "agents": ["claude-code", "codex"],
+    "store": "…/.agents/skills/loam"
+  }
 }
 ```
 
 `created` 决定卸载语义：loam 创建的文件在清空后删除，原本存在的文件只去块。
+
+## skill 来源
+
+- 仓库路径 `cli/skills/SKILL.md`；Skills CLI 要求 frontmatter 带 `name` 与 `description`，缺了会被跳过（`No valid skills found`）。
+- 正常安装从 GitHub 拉 `yidasanqian/loam`；本地改完未 push 时用 `LOAM_SKILL_SOURCE=<仓库路径> loam install -y` 验证同一路径。
+- 只刷新 skill：`npx skills update loam`；全部重装：`loam install`。
 
 ## hooks（可选）
 
@@ -84,7 +95,7 @@ loam uninstall --dry-run   # 打印回滚清单
 loam uninstall -y
 ```
 
-- 按 install.json 逆操作：去块 → 删技能文件（含空目录）→ 移除 hook → 删 install.json。
+- 按 install.json 逆操作：去块 → 删链接/遗留技能副本 → 移除 hook → `npx skills remove loam -g` → 删 install.json。
 - 不删除 `~/.loamrc.json`、outbox、缓存与 D1 数据；需要时手动处理。
 
 ## harness 沙箱

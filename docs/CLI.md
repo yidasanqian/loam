@@ -20,7 +20,7 @@ loam <command> [options]
 代理来源按优先级：`HTTPS_PROXY` / `HTTP_PROXY` → `LOAM_PROXY` → `login --proxy` 存入 `~/.loamrc.json`。检测到代理时 CLI 自动以 `--use-env-proxy` 重执行一次（Node ≥24），之后无需再设环境变量：
 
 ```bash
-loam login --server https://loam.sanqian.workers.dev --name win-desktop --proxy http://127.0.0.1:7890
+loam login --server https://loam.example.workers.dev --name win-desktop --proxy http://127.0.0.1:7890
 loam search "keyword"          # 自动走配置里的代理
 ```
 
@@ -125,16 +125,20 @@ loam upgrade            # 当前 CLI / npm 最新 / 接线版本；给出升级�
 loam upgrade --json
 ```
 
-不自动安装（全局 npm 自替换在 Windows 上不可靠）。输出 `npm i -g @yidasanqian/loam@latest` 与 `loam install`；`loam doctor` 的 `version` 项会在接线版本与 CLI 不一致时失败。
+不自动安装（全局 npm 自替换在 Windows 上不可靠）。输出 `npm i -g @yidasanqian/loam@latest` 与 `loam install`；skill 也可用 `npx skills update loam` 单独刷新；`loam doctor` 的 `version` 项会在接线版本与 CLI 不一致时失败。
 
 ## install / uninstall / doctor / inject
 
 ```bash
+loam onboard --server URL [--name NAME] [--admin-token-file FILE] [--proxy URL] [--only dsh,claude,codex] [--with-hooks]
 loam install [--only dsh,claude,codex] [--dry-run] [-y] [--with-hooks] [--repo PATH]
 loam uninstall [--dry-run] [-y]
 loam doctor
 loam inject [--max 3] [--project P]
 ```
+
+- `onboard` = 登录（已有 token 时跳过）+ `install -y`；`--server` 必填，填你自己的 worker 地址。
+- `install` 的 skill 接线走 `npx skills add yidasanqian/loam`，失败时打印手动命令但不清空其它接线。
 
 - `inject` 供 hook 使用：按 `sort=rank` 取前 N（常驻优先），输出 `<loam>…</loam>`，最多 3 条 × 60 字符，总计 ≤800 字符；无配置或网络失败时**静默且退出 0**。
 - `doctor` 逐项检查 config / token / repo 标记块 / install.json / 文件 / 最近 recall，失败项附修复命令。
