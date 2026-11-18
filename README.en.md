@@ -230,7 +230,7 @@ git tag v0.1.0 && git push --tags
 
 > If a tag release fails at `npm publish` with `404 Not Found - PUT https://registry.npmjs.org/@yidasanqian%2floam`, the npm-side Trusted Publisher is missing or does not match this repo/workflow; it is not a code problem. Configure `release.yml` under the package settings and publish a new version. `0.1.1` was published manually with a granular token (no provenance) for exactly this reason.
 >
-> A private repository cannot publish with provenance: `--provenance` fails with `E422 … Unsupported GitHub Actions source repository visibility: "private"`. The release workflow now drops provenance for private repositories and keeps it for public ones. `0.1.2` was published manually with the local token.
+> `--provenance` only supports public source repositories. This repo is now public, so tag releases publish with provenance. `0.1.1` / `0.1.2` were published manually (no provenance); if the repo becomes private again, the workflow drops provenance automatically.
 
 `deploy` is serialized with `concurrency`; `release` relies on npm provenance (`id-token: write`).
 

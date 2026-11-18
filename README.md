@@ -230,7 +230,7 @@ git tag v0.1.0 && git push --tags
 
 > 若 tag 发布在 `npm publish` 报 `404 Not Found - PUT https://registry.npmjs.org/@yidasanqian%2floam`，是 npm 侧 Trusted Publisher 未配置或与仓库 / workflow 不匹配，不是代码问题：先在 npm 包设置里配好 `release.yml`，再用新版本号重发。`0.1.1` 就是该情况下的手动 granular-token 发布（无 provenance）。
 >
-> 私有仓库不能带 provenance：`--provenance` 会报 `E422 … Unsupported GitHub Actions source repository visibility: "private"`。release workflow 已对 private 仓库自动去掉 provenance；仓库改为 public 后会自动带上。`0.1.2` 为本地 token 手动发布。
+> `--provenance` 只支持 public 源仓库。仓库现为 public，后续 tag 发布会自动带 provenance；`0.1.1` / `0.1.2` 为手动发布（无 provenance）。若以后改回 private，workflow 会自动去掉 provenance。
 
 `deploy` 用 `concurrency` 串行；`release` 依赖 npm provenance（`id-token: write`）。
 
