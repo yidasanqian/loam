@@ -22,6 +22,19 @@ jobs:
           cache: pnpm
           registry-url: https://registry.npmjs.org
       - run: pnpm install --frozen-lockfile
+      - name: Check tag and unpublished version
+        working-directory: cli
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          TAG="${GITHUB_REF_NAME#v}"
+          if [ "$VERSION" != "$TAG" ]; then
+            echo "::error::tag ${GITHUB_REF_NAME} does not match cli/package.json version ${VERSION}"
+            exit 1
+          fi
+          if npm view "@yidasanqian/loam@${VERSION}" version >/dev/null 2>&1; then
+            echo "::error::@yidasanqian/loam@${VERSION} is already published; bump the version before tagging."
+            exit 1
+          fi
       - run: pnpm typecheck
       - run: pnpm -r test
       - run: pnpm --filter @loam/worker run test:offline
