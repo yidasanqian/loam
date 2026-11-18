@@ -48,9 +48,15 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: pnpm exec wrangler deploy
       - name: Smoke test
+        env:
+          LOAM_URL: ${{ vars.LOAM_URL }}
         run: |
+          if [ -z "$LOAM_URL" ]; then
+            echo "LOAM_URL is not set; skipping smoke test" >&2
+            exit 0
+          fi
           for i in $(seq 1 20); do
-            code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 https://loam.sanqian.workers.dev/health || true)
+            code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 "$LOAM_URL/health" || true)
             [ "$code" = "200" ] && exit 0
             sleep 3
           done
