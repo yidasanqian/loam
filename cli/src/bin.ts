@@ -10,10 +10,11 @@ import { configPath, readConfig, requireConfig, resolveConfig, writeConfig, writ
 import { CliError, OfflineError } from './errors.ts';
 import { formatDetail, formatFacts, oneLine, shortId } from './format.ts';
 import { doctorChecks } from './install/doctor.ts';
-import { install, uninstall } from './install/index.ts';
+import { install, readInstallRecord, uninstall } from './install/index.ts';
 import { appendOutbox, flushOutbox } from './outbox.ts';
 import { detectProject, sanitizeProject } from './project.ts';
 import { detectHarness, parseDurationDays, parseTags, promptLine, readStdin, writeFileAtomic } from './util.ts';
+import { PACKAGE_NAME, fetchLatestVersion, planUpgrade } from './upgrade.ts';
 import { VERSION } from './version.ts';
 
 const program = new Command();
@@ -498,6 +499,29 @@ program
       else params.set('all', '1');
       const response = await new Client(config).request<{ deleted: number }>('DELETE', `/v1/facts?${params.toString()}`);
       console.log(`${pc.green('✓')} 已软删除 ${response.deleted} 条`);
+    }),
+  );
+
+program
+  .command('upgrade')
+  .description('检查 npm 最新 CLI 与本机接线版本（不自动安装）')
+  .option('--json')
+  .action((options: { json?: boolean }) =>
+    run(async () => {
+      const latest = await fetchLatestVersion();
+      const record = readInstallRecord();
+      const plan = planUpgrade({ current: VERSION, latest, wiring: record?.version ?? null });
+      if (options.json) {
+        console.log(JSON.stringify(plan));
+        return;
+      }
+      if (!latest) console.log(pc.yellow('~ 无法查询 npm；按下面的命令手动处理：'));
+      else if (plan.state === 'current') console.log(`${pc.green('✓')} ${PACKAGE_NAME} 已是最新 ${VERSION}`);
+      else if (plan.state === 'outdated') console.log(`${pc.yellow('↑')} ${PACKAGE_NAME} ${VERSION} → ${latest}`);
+      else console.log(pc.dim(`${PACKAGE_NAME} 本地 ${VERSION} 高于 npm ${latest}（未发布或本地构建）`));
+      console.log(pc.dim(`  接线版本：${record ? record.version : '未安装'}`));
+      if (plan.commands.length === 0) console.log(pc.dim('  无需操作'));
+      for (const command of plan.commands) console.log(`  ${command}`);
     }),
   );
 

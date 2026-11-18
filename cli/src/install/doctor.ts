@@ -4,6 +4,7 @@ import { readConfig, readLastRecall, resolveConfig } from '../config.ts';
 import { CliError } from '../errors.ts';
 import { detectRepoRoot } from '../project.ts';
 import { readTextFile } from '../util.ts';
+import { VERSION } from '../version.ts';
 import { hasBlock } from './blocks.ts';
 import { readInstallRecord } from './index.ts';
 
@@ -61,6 +62,19 @@ export async function doctorChecks(options: { repoRoot?: string } = {}): Promise
       ? { name: 'install', ok: true, detail: `${record.harnesses.join(', ')} @ ${record.repoRoot}` }
       : { name: 'install', ok: false, detail: '没有 install.json', fix: 'loam install' },
   );
+
+  if (record) {
+    checks.push(
+      record.version === VERSION
+        ? { name: 'version', ok: true, detail: VERSION }
+        : {
+            name: 'version',
+            ok: false,
+            detail: `接线 ${record.version}，CLI ${VERSION}`,
+            fix: 'loam install',
+          },
+    );
+  }
 
   if (record) {
     const missing = record.files.filter((file) => file.kind !== 'hooks' && readTextFile(file.path) === null);

@@ -99,6 +99,15 @@ loam uninstall            # 按 install.json 精确回滚
 
 `install` 只动两处：仓库 `AGENTS.md` 的 `<!-- loam:start -->…<!-- loam:end -->` 标记块，以及各 harness 的指令文件与 skill 目录；每次写入都记进 `~/.loam/install.json`。
 
+升级 CLI 后要重新接线，否则本地 skill 仍是旧内容：
+
+```bash
+loam upgrade        # 查看 CLI / npm 最新 / 接线版本
+npm i -g @yidasanqian/loam@latest
+loam install        # 刷新 skill 与 AGENTS.md 块
+loam doctor         # version 项会指出接线版本漂移
+```
+
 ## CLI 一览
 
 | 命令 | 作用 |
@@ -108,6 +117,7 @@ loam uninstall            # 按 install.json 精确回滚
 | `search "<关键词>" [--sort rank\|recent]` | 默认 5 条、≤6 行、每行 ≤100 字符；默认按常驻/热度排序 |
 | `show <id\|前缀>` / `list` | 单条详情（含常驻/取代链）/ 最近 N 条 |
 | `devices [list\|revoke\|rotate]` | 设备与 token 生命周期 |
+| `upgrade` | 检查 npm 最新版与接线版本，给出升级/刷新命令 |
 | `export` / `import` | NDJSON 备份与恢复（含 pinned/importance） |
 | `flush` | 补发离线 outbox |
 | `prune --older 180d` | 软删除过期事实（跳过常驻） |

@@ -118,6 +118,15 @@ loam prune --all --older 90d
 
 软删除（`deleted_at`），不物理删除；`pinned` 常驻条目不参与 prune；`--yes` 供非交互环境。
 
+## upgrade
+
+```bash
+loam upgrade            # 当前 CLI / npm 最新 / 接线版本；给出升级与刷新命令
+loam upgrade --json
+```
+
+不自动安装（全局 npm 自替换在 Windows 上不可靠）。输出 `npm i -g @yidasanqian/loam@latest` 与 `loam install`；`loam doctor` 的 `version` 项会在接线版本与 CLI 不一致时失败。
+
 ## install / uninstall / doctor / inject
 
 ```bash

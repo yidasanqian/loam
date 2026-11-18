@@ -34,3 +34,10 @@ loam export --out facts.ndjson
 loam flush
 loam prune --older 180d
 ```
+
+## Upgrade
+
+- CLI: `npm i -g @yidasanqian/loam@latest`
+- Refresh this skill and the AGENTS.md block after upgrading: `loam install`
+- Check versions first: `loam upgrade` (newer CLIs; compares CLI, npm latest and the installed skill version)
+- Upgrade only when the user asks, or when a documented command is missing.

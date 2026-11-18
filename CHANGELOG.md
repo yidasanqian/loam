@@ -13,6 +13,7 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 - CLI：`add --pin --importance --supersedes`、`search --sort rank|recent`（默认 rank）、`show` 显示常驻/重要度/取代；`inject` 按 rank 注入。
 - 迁移 `worker/migrations/0002-memory-shape.sql`；[docs/UI.md](docs/UI.md)；本地样例脚本 `scripts/seed-dev.mjs`。
 - 迁移防回归：`scripts/check-d1-schema.mjs` 在 deploy 前按所有 migrations 提取 `ADD COLUMN` 校验线上列；离线 `worker/test/offline/migrations.test.ts` 用 0.1 fixture 断言「旧库 + 迁移」与全新 schema 的列/索引一致。
+- CLI：`loam upgrade` 检查 npm 最新版与 `install.json` 接线版本并给出命令；`loam doctor` 增加 `version` 一致性检查；skill 增加升级说明（`npm i -g …@latest` → `loam install`）。
 
 ### Changed
 

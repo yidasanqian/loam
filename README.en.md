@@ -99,6 +99,15 @@ loam uninstall            # exact rollback from install.json
 
 `install` touches only two things: the `<!-- loam:start -->…<!-- loam:end -->` block in the repo `AGENTS.md`, and each harness's instruction file plus skill directory. Every write is recorded in `~/.loam/install.json`.
 
+Upgrading the CLI does not refresh that copy; re-run install afterwards:
+
+```bash
+loam upgrade        # CLI / npm latest / installed skill version
+npm i -g @yidasanqian/loam@latest
+loam install        # refresh the skill and the AGENTS block
+loam doctor         # the version check reports wiring drift
+```
+
 ## CLI
 
 | Command | Purpose |
@@ -108,6 +117,7 @@ loam uninstall            # exact rollback from install.json
 | `search "<keywords>" [--sort rank\|recent]` | 5 results, ≤6 lines, ≤100 chars each; ranked by default |
 | `show <id\|prefix>` / `list` | one fact with pinned/supersede state / recent facts |
 | `devices [list\|revoke\|rotate]` | device and token lifecycle |
+| `upgrade` | compare the CLI with npm and with the installed skill version |
 | `export` / `import` | NDJSON backup and restore (includes pinned/importance) |
 | `flush` | replay the offline outbox |
 | `prune --older 180d` | soft-delete stale facts (skips pinned) |
