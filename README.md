@@ -80,7 +80,7 @@ $ loam search "auth token"
 
 ![loam 工作台：四泳道、卡片与底部捕获条](docs/images/loam-board.png)
 
-**记忆模型原理图 · 1440×900**
+**记忆模型原理图 · 1440×1260**
 
 ![loam 记忆模型原理图：写入、形状、读取、维护](docs/images/loam-model.png)
 

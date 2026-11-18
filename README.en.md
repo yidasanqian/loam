@@ -80,7 +80,7 @@ Open your worker URL and paste the token from `~/.loamrc.json`:
 
 ![loam workbench: four lanes, cards and the capture dock](docs/images/loam-board.png)
 
-**Memory model diagram · 1440×900**
+**Memory model diagram · 1440×1260**
 
 ![loam memory model diagram: write, shape, recall, upkeep](docs/images/loam-model.png)
 
