@@ -116,7 +116,7 @@ pnpm check:licenses              # 许可证白名单
 | M2 CLI MVP + outbox + 裁剪 | 完成；CLI 30/30；真机 login/add/search/flush/revoke 全通，search 6 行 / 80 字符上限实测 |
 | M2.5 installer + doctor + uninstall | 完成；安装/重装幂等/卸载回滚套件通过，真机 dry-run 探测三端正确 |
 | M3 三端接线 / M4 双机验收 | 三端无头会话实测命中（DSH 本会话、`claude -p`、`codex exec`，provenance 正确）；第二台物理机未联调 |
-| M5 CI / license 检查 / 发布 | CI（frozen lockfile）+ 许可证白名单 + `wrangler deploy --dry-run` 通过；发布待 npm token |
+| M5 CI / license 检查 / 发布 | `@yidasanqian/loam@0.1.0` 已发布；CI + 自动部署通过；0.1.1 用于验证 OIDC 发布 |
 
 验证命令与结果见下节；实测环境：Node 24.19、pnpm 11.28、wrangler 4.162、Windows 11。
 

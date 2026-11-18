@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented here. Format: [Keep a Changelog](https://keepachangelog.com/), SemVer.
 
+## [0.1.1] - 2026-11-18
+
+### Changed
+
+- 版本仅用于验证 Trusted Publishing（OIDC）自动发布；0.1.0 已发布，npm 不允许覆盖同版本。
+
 ## [0.1.0] - 2026-11-17
 
 ### Added
