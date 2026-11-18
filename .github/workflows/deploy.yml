@@ -33,12 +33,19 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck
       - run: pnpm -r test
-      - name: Apply D1 schema
+      - name: Verify D1 schema
         working-directory: worker
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: pnpm exec wrangler d1 execute loam --file=./schema.sql --remote -y
+        run: |
+          columns=$(pnpm exec wrangler d1 execute loam --remote --json --command "SELECT name FROM pragma_table_info('facts')")
+          for column in pinned importance superseded_by superseded_at; do
+            if ! printf '%s' "$columns" | grep -q "\"$column\""; then
+              echo "D1 is missing '$column'. Apply worker/migrations/0002-memory-shape.sql --remote before deploying." >&2
+              exit 1
+            fi
+          done
       - name: Deploy worker
         working-directory: worker
         env:

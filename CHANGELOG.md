@@ -19,6 +19,10 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 - `prune` 跳过常驻条目；删除被取代目标时清空指向它的 `superseded_by`。
 - NDJSON 导出与导入包含 `pinned` / `importance`。
 
+### Fixed
+
+- deploy workflow 不再对旧库盲目执行 `schema.sql`（会因 `no such column: pinned` 失败）；改为部署前校验记忆形状四列，迁移仍按文档手动执行。
+
 ### Notes
 
 - 仍未做：MCP、服务端 LLM 抽取、向量检索、多用户 RBAC、快捷键映射、界面以外内容的翻译。

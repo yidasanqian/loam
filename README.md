@@ -65,16 +65,20 @@ node dist/bin.js search "source"
 ```bash
 cd worker
 pnpm dlx wrangler d1 create loam           # 把 database_id 填进 wrangler.toml
-pnpm dlx wrangler d1 execute loam --file=./schema.sql --remote   # 全新库
-# 已有 0.1 的线上库只跑迁移：
+# 二选一：全新库跑 schema.sql；已有 0.1 的库只跑迁移。
+pnpm dlx wrangler d1 execute loam --file=./schema.sql --remote
 # pnpm dlx wrangler d1 execute loam --file=./migrations/0002-memory-shape.sql --remote
 pnpm dlx wrangler secret put ADMIN_TOKEN   # 只在 /v1/activate 使用
 pnpm deploy
 ```
 
+`deploy` workflow 只**校验** schema（缺列直接失败），不会自动改库；迁移按上面的命令先手动执行。升级前先 `loam export --out backup.ndjson`，或 `wrangler d1 export loam --remote --output backup.sql`。
+
 参考部署：`https://loam.sanqian.workers.dev`。`ADMIN_TOKEN` 只用于发放设备 token；设备拿到 `loam_<id8>_<32B>` 后独立鉴权，撤销单台不影响其它设备。
 
 升级前先 `loam export --out backup.ndjson`。新列是纯增量的，旧代码忽略它们，回滚代码不需要回滚 schema。
+
+`deploy` workflow 只校验 schema，不自动迁移：先跑 `worker/migrations/0002-memory-shape.sql --remote`，再 push 或手动触发 deploy。
 
 中国大陆直连 `workers.dev` 可能超时（实测需代理）。登录时把代理写进配置，之后 CLI 自动使用（Node ≥24）：
 

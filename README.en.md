@@ -65,16 +65,20 @@ node dist/bin.js search "source"
 ```bash
 cd worker
 pnpm dlx wrangler d1 create loam           # then fill database_id in wrangler.toml
-pnpm dlx wrangler d1 execute loam --file=./schema.sql --remote   # fresh database
-# an existing 0.1 database runs only the migration:
+# pick one: fresh database runs schema.sql; an existing 0.1 database runs only the migration.
+pnpm dlx wrangler d1 execute loam --file=./schema.sql --remote
 # pnpm dlx wrangler d1 execute loam --file=./migrations/0002-memory-shape.sql --remote
 pnpm dlx wrangler secret put ADMIN_TOKEN   # only used by /v1/activate
 pnpm deploy
 ```
 
+The `deploy` workflow only **verifies** the schema (it fails on a missing column) and never alters the database; run the migration above first. Back up before upgrading with `loam export --out backup.ndjson` or `wrangler d1 export loam --remote --output backup.sql`.
+
 Reference deployment: `https://loam.sanqian.workers.dev`. `ADMIN_TOKEN` only issues device tokens; each device then authenticates with its own `loam_<id8>_<32B>` token, and revoking one device does not touch the others.
 
 Run `loam export --out backup.ndjson` before upgrading. The new columns are purely additive; old code ignores them, so rolling the code back does not require a schema rollback.
+
+The `deploy` workflow verifies the schema and refuses to deploy when a column is missing; it never migrates. Apply `worker/migrations/0002-memory-shape.sql --remote` first, then push or dispatch the deploy workflow.
 
 Direct access to `workers.dev` from mainland China may time out (a proxy is usually required). Store the proxy once at login, and Node ≥24 picks it up automatically:
 
