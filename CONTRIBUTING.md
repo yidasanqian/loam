@@ -47,4 +47,4 @@ pnpm -r test
 
 - 一个 commit 一个最小功能单元；信息写「为什么」，不写「改了哪些文件」。
 - 不提交 `~/.loamrc.json`、`.dev.vars`、outbox、缓存、`dist/`。
-- 发布：npm 要求「2FA 或带 Bypass 2FA 的 Granular Access Token」二选一。未开 2FA 时用 bypass token 发布一次并立即删除；长期建议启用 2FA（TOTP），配置 Trusted Publisher 后 tag 发布免 token/OTP。`cli/.npmrc` 固定 npmjs。
+- 发布：首次用一次性 **Bypass 2FA** Granular Token（`npm config set //registry.npmjs.org/:_authToken=…` → `cd cli && npm publish --access public` → 删除 token）。`npm login` 的 web token 即使带 `--otp` 也可能 E403。首次发布后配置 Trusted Publisher，后续 tag 走 OIDC，免 token/OTP。

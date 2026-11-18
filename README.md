@@ -137,20 +137,23 @@ gh secret set CLOUDFLARE_API_TOKEN      # Workers Scripts:Edit + D1:Edit
 发布走 **Trusted Publishing（OIDC）**，不需要 `NPM_TOKEN`。但包首次发布前 npm 侧还不存在条目，必须先手动发一次：
 
 ```bash
-cd cli && npm login && npm publish --access public   # 已启用 2FA 时；会提示 OTP
+# 首次发布：一次性 Bypass-2FA Granular Access Token
+# 1) npmjs.com/settings/yidasanqian/tokens → Generate New Token → Granular Access Token
+#    ✔ Bypass two-factor authentication
+#    Packages and scopes: All Packages · Read and write (publish and stage)
+#    Expiration: 1 day
+cd cli
+npm config set //registry.npmjs.org/:_authToken=<token>
+npm publish --access public
+npm config delete //registry.npmjs.org/:_authToken
+# 2) 发布成功后立即在 npm 删除该 token
 ```
 
-> `cli/.npmrc` 与 `publishConfig.registry` 都固定到 `https://registry.npmjs.org/`。若在仓库根目录执行 `npm login`，记得加 `--registry=https://registry.npmjs.org/`，否则会打开 npmmirror 的登录页。
+> `cli/.npmrc` 与 `publishConfig.registry` 都固定到 `https://registry.npmjs.org/`。
 >
-> 未启用 2FA 也能发布：npm 要求「2FA 或带 **Bypass 2FA** 的 Granular Access Token」二选一。到 `npmjs.com/settings/yidasanqian/tokens` → Generate New Token → Granular Access Token，勾选 **Bypass two-factor authentication**，权限选 **Read and write (publish and stage)**，然后：
+> npm 要求「账号 2FA 或带 **Bypass 2FA** 的 Granular Token」二选一。实测 `npm login` 得到的 web token 即使加 `--otp` 仍返回 `E403`（token 发布路径无法完成交互式 2FA 挑战），所以首次发布直接用一次性 bypass token 最省事；若浏览器里的 2FA 能正常完成，也可以 `npm login && npm publish` 走 OTP。
 >
-> ```bash
-> npm config set //registry.npmjs.org/:_authToken=<token>
-> cd cli && npm publish --access public
-> npm config delete //registry.npmjs.org/:_authToken
-> ```
->
-> 发布后立即在 npm 删除该 token。长期仍建议启用 2FA（TOTP）：Trusted Publisher 的配置属于包设置修改，需要交互式 2FA；配置好后 tag 发布走 OIDC，无需 token/OTP。
+> 长期仍建议启用可用的 2FA（TOTP）：Trusted Publisher 的配置属于包设置修改，需要交互式 2FA；配置好后 tag 发布走 OIDC，无需 token/OTP。
 
 然后配置 `npmjs.com/package/@loam/cli/settings → Trusted Publisher → GitHub Actions`：
 
