@@ -6,7 +6,7 @@
 
 | 层 | v1 | 内容 |
 |---|---|---|
-| L1 | 必做 | `npx @loam/cli install`：探测 → 勾选 → 逐端接线；`--dry-run`、`-y`、`--only` |
+| L1 | 必做 | `npx @yidasanqian/loam install`：探测 → 勾选 → 逐端接线；`--dry-run`、`-y`、`--only` |
 | L2 | 开源后 | npm -g / Homebrew tap / winget-scoop |
 | L3 | 可选 | DSH Cordis 插件、Claude marketplace 条目，壳内只调用 installer |
 

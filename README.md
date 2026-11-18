@@ -3,7 +3,7 @@
 单人、多设备、多 harness（DSH / Claude Code / Codex）共享的**项目级长期记忆**。
 一条命令接入，CLI + skill 调用，Cloudflare 免费层承载，不做 MCP。
 
-- 命令：`loam`　发布名：`@loam/cli`（`loam` 已被 GDAL wrapper 占用，2026-11-17 核验；`@loam/cli` / `@loam/worker` 在 npm 上均为 404）
+- 命令：`loam`　发布名：`@yidasanqian/loam`（裸名 `loam` 已被占用；`@loam` scope 不归本账号，改用个人 scope）
 - 后端：Workers + D1（Hono 路由，per-device Bearer，原生限流）
 - 边界与取舍：见 [docs/SCOPE.md](docs/SCOPE.md) 与 [docs/DECISIONS/](docs/DECISIONS/)
 
@@ -111,7 +111,7 @@ pnpm check:licenses              # 许可证白名单
 
 | 阶段 | 状态 |
 |---|---|
-| M0 骨架 + 边界 + 5 条 ADR | 完成；名字核验：`loam` 已占，`@loam/cli` 可用 |
+| M0 骨架 + 边界 + 5 条 ADR | 完成；名字核验：`loam` 已占，最终发布名 `@yidasanqian/loam` |
 | M1 Worker + 鉴权 + facts CRUD + 限流 | 完成；vitest 官方池 17/17（401/403/429 路径、A↔B、边界、分页） |
 | M2 CLI MVP + outbox + 裁剪 | 完成；CLI 30/30；真机 login/add/search/flush/revoke 全通，search 6 行 / 80 字符上限实测 |
 | M2.5 installer + doctor + uninstall | 完成；安装/重装幂等/卸载回滚套件通过，真机 dry-run 探测三端正确 |
@@ -155,7 +155,7 @@ npm config delete //registry.npmjs.org/:_authToken
 >
 > 长期仍建议启用可用的 2FA（TOTP）：Trusted Publisher 的配置属于包设置修改，需要交互式 2FA；配置好后 tag 发布走 OIDC，无需 token/OTP。
 
-然后配置 `npmjs.com/package/@loam/cli/settings → Trusted Publisher → GitHub Actions`：
+然后配置 `npmjs.com/package/@yidasanqian/loam/settings → Trusted Publisher → GitHub Actions`：
 
 | 字段 | 值 |
 |---|---|
