@@ -177,8 +177,8 @@ pnpm check:licenses              # 许可证白名单
 | M2 CLI MVP + outbox + 裁剪 | 完成；CLI 32/32 |
 | M2.5 installer + doctor + uninstall | 完成 |
 | M3 三端接线 / M4 双机验收 | 三端无头会话实测命中；第二台物理机未联调 |
-| M5 CI / license / 发布 | `0.1.0`、`0.1.1`、`0.1.2` 已发布；CI + 自动部署 + 迁移防回归通过 |
-| 记忆工作台 + 记忆形状（ADR-0006） | `0.1.2` 已发布；离线 17/17、HTTP 23/23、CLI 38/38 |
+| M5 CI / license / 发布 | `0.1.0`–`0.1.3` 已发布；CI + 自动部署 + 迁移防回归通过 |
+| 记忆工作台 + 记忆形状（ADR-0006） | `0.1.3` 已发布；离线 17/17、HTTP 23/23、CLI 38/38 |
 
 ## GitHub CI/CD
 
@@ -213,7 +213,7 @@ git tag v0.1.0 && git push --tags
 
 > 若 tag 发布在 `npm publish` 报 `404 Not Found - PUT https://registry.npmjs.org/@yidasanqian%2floam`，是 npm 侧 Trusted Publisher 未配置或与仓库 / workflow 不匹配，不是代码问题：先在 npm 包设置里配好 `release.yml`，再用新版本号重打 tag；不要用 token 手动发布。
 >
-> `--provenance` 只支持 public 源仓库。仓库现为 public，后续 tag 发布会自动带 provenance；`0.1.1` / `0.1.2` 早于该配置，未带 provenance。若以后改回 private，workflow 会自动去掉 provenance。
+> `--provenance` 只支持 public 源仓库。仓库现为 public，tag 发布自动带 provenance；`0.1.1` / `0.1.2` 未带 provenance，`0.1.3` 起由 CI 发布并带 provenance。若以后改回 private，workflow 会自动去掉 provenance。
 
 `deploy` 用 `concurrency` 串行；`release` 依赖 npm provenance（`id-token: write`）。
 

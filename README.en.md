@@ -177,8 +177,8 @@ The 10-item manual UI checklist is in [docs/UI.md](docs/UI.md); `scripts/seed-de
 | M2 CLI MVP + outbox + output clipping | done; CLI 32/32 |
 | M2.5 installer + doctor + uninstall | done |
 | M3 three harnesses / M4 second machine | all three harnesses hit in headless sessions; second physical machine not tested |
-| M5 CI / license / publish | `0.1.0`, `0.1.1`, `0.1.2` published; CI, auto-deploy and migration guard green |
-| Workbench + memory shape (ADR-0006) | released in `0.1.2`; offline 17/17, HTTP 23/23, CLI 38/38 |
+| M5 CI / license / publish | `0.1.0`–`0.1.3` published; CI, auto-deploy and migration guard green |
+| Workbench + memory shape (ADR-0006) | released in `0.1.3`; offline 17/17, HTTP 23/23, CLI 38/38 |
 
 ## GitHub CI/CD
 
@@ -213,7 +213,7 @@ git tag v0.1.0 && git push --tags
 
 > If a tag release fails at `npm publish` with `404 Not Found - PUT https://registry.npmjs.org/@yidasanqian%2floam`, the npm-side Trusted Publisher is missing or does not match this repo/workflow; it is not a code problem. Configure `release.yml` under the package settings and tag a new version; do not publish with a token.
 >
-> `--provenance` only supports public source repositories. This repo is now public, so tag releases publish with provenance. `0.1.1` / `0.1.2` predate this configuration and carry no provenance; if the repo becomes private again, the workflow drops provenance automatically.
+> `--provenance` only supports public source repositories. This repo is public, so tag releases publish with provenance. `0.1.1` / `0.1.2` carry no provenance; `0.1.3` and later are published by CI with provenance. If the repo becomes private again, the workflow drops provenance automatically.
 
 `deploy` is serialized with `concurrency`; `release` relies on npm provenance (`id-token: write`).
 
