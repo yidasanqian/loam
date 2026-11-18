@@ -137,10 +137,12 @@ gh secret set CLOUDFLARE_API_TOKEN      # Workers Scripts:Edit + D1:Edit
 发布走 **Trusted Publishing（OIDC）**，不需要 `NPM_TOKEN`。但包首次发布前 npm 侧还不存在条目，必须先手动发一次：
 
 ```bash
-cd cli && npm login && npm publish --access public   # 仅首次；cli/.npmrc 已锁定 npmjs
+cd cli && npm login && npm publish --access public --otp=123456   # 仅首次；2FA 验证码
 ```
 
 > `cli/.npmrc` 与 `publishConfig.registry` 都固定到 `https://registry.npmjs.org/`。若在仓库根目录执行 `npm login`，记得加 `--registry=https://registry.npmjs.org/`，否则会打开 npmmirror 的登录页。
+>
+> 若报 `E403 … Two-factor authentication or granular access token with bypass 2fa enabled`：账号开了 2FA，本地发布需要 OTP，或改用带 **Bypass 2FA** 的 Granular Access Token（Read and write）临时发布——`npm config set //registry.npmjs.org/:_authToken=<token>`，发完删掉。首次发布成功后配置 Trusted Publisher，之后 tag 发布走 OIDC，不再需要 OTP 或 token。
 
 然后配置 `npmjs.com/package/@loam/cli/settings → Trusted Publisher → GitHub Actions`：
 
