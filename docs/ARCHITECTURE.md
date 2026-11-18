@@ -83,6 +83,7 @@ INDEX(superseded_by)                        -- 删除目标时清指针
 INDEX(created_at DESC)                      -- export / --all
 ```
 
+- `schema.sql` 只用于全新库；已有库的升级走 `worker/migrations/NNNN-*.sql`（有序、只增列/加索引）。deploy 前 `scripts/check-d1-schema.mjs` 从迁移文件提取 `ADD COLUMN` 并对线上 `pragma_table_info` 校验；离线 `migrations.test.ts` 断言 0.1 + 迁移与全新 schema 的列、索引一致。
 - 事实为软删除（`deleted_at`），保证 hash 去重不会因删后重写产生歧义；`prune` 只是批量置位，且跳过 `pinned=1`。
 - 取代是事实级时态：`superseded_by` 指向同 project 的新行，默认召回过滤 `superseded_by IS NULL`；被取代时同批次清掉 `pinned`（退出的规则不该继续占用常驻位）。PATCH 只能置空（解除取代），建立取代必须走 `POST {supersedes}`，因此不会出现环。
 - `importance` 只由写入方给出（1..5），服务端不推测；新列不加 SQL CHECK（SQLite 无法给已存在列加约束），范围校验集中在 `validate.ts`。

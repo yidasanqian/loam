@@ -12,6 +12,7 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 - `GET /v1/stats` 增加 `byKind` / `pinned` / `superseded`；`POST /v1/facts` 支持 `supersedes`；`PATCH /v1/facts/:id` 支持 `pinned` / `importance` / 取消取代。
 - CLI：`add --pin --importance --supersedes`、`search --sort rank|recent`（默认 rank）、`show` 显示常驻/重要度/取代；`inject` 按 rank 注入。
 - 迁移 `worker/migrations/0002-memory-shape.sql`；[docs/UI.md](docs/UI.md)；本地样例脚本 `scripts/seed-dev.mjs`。
+- 迁移防回归：`scripts/check-d1-schema.mjs` 在 deploy 前按所有 migrations 提取 `ADD COLUMN` 校验线上列；离线 `worker/test/offline/migrations.test.ts` 用 0.1 fixture 断言「旧库 + 迁移」与全新 schema 的列/索引一致。
 
 ### Changed
 
@@ -21,7 +22,7 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 
 ### Fixed
 
-- deploy workflow 不再对旧库盲目执行 `schema.sql`（会因 `no such column: pinned` 失败）；改为部署前校验记忆形状四列，迁移仍按文档手动执行。
+- deploy workflow 不再对旧库盲目执行 `schema.sql`（会因 `no such column: pinned` 失败）；改为部署前按迁移声明的所有新增列校验，迁移仍按文档手动执行。
 
 ### Notes
 

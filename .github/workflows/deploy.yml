@@ -40,12 +40,7 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
           columns=$(pnpm exec wrangler d1 execute loam --remote --json --command "SELECT name FROM pragma_table_info('facts')")
-          for column in pinned importance superseded_by superseded_at; do
-            if ! printf '%s' "$columns" | grep -q "\"$column\""; then
-              echo "D1 is missing '$column'. Apply worker/migrations/0002-memory-shape.sql --remote before deploying." >&2
-              exit 1
-            fi
-          done
+          printf '%s' "$columns" | node ../scripts/check-d1-schema.mjs
       - name: Deploy worker
         working-directory: worker
         env:

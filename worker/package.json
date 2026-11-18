@@ -10,7 +10,7 @@
     "deploy": "wrangler deploy",
     "db:init": "wrangler d1 execute loam --file=./schema.sql --local",
     "test": "vitest run",
-    "test:offline": "node --experimental-strip-types --test test/offline/core.test.ts",
+    "test:offline": "node --experimental-strip-types --test test/offline/core.test.ts test/offline/migrations.test.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
