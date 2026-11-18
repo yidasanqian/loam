@@ -9,6 +9,9 @@ export interface PendingFact {
   text: string;
   tags: string[];
   harness: string;
+  pinned?: boolean;
+  importance?: number;
+  supersedes?: string;
   queuedAt: number;
 }
 

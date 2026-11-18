@@ -1,9 +1,11 @@
 # loam
 
-单人、多设备、多 harness（DSH / Claude Code / Codex）共享的**项目级长期记忆**。
-一条命令接入，CLI + skill 调用，Cloudflare 免费层承载，不做 MCP。
+**简体中文** · [English](README.en.md)
 
-- 命令：`loam`　发布名：`@yidasanqian/loam`（裸名 `loam` 已被占用；`@loam` scope 不归本账号，改用个人 scope）
+单人、多设备、多 harness（DSH / Claude Code / Codex）共享的**项目级长期记忆**。
+一条命令接入，CLI + skill 调用，Cloudflare 免费层承载，不做 MCP。仓库内置一个同源**记忆工作台**（四泳道 + 原理图 + 中英双语界面）。
+
+- 命令：`loam`　发布名：`@yidasanqian/loam`
 - 后端：Workers + D1（Hono 路由，per-device Bearer，原生限流）
 - 边界与取舍：见 [docs/SCOPE.md](docs/SCOPE.md) 与 [docs/DECISIONS/](docs/DECISIONS/)
 
@@ -23,20 +25,38 @@ loam CLI ──HTTPS/JSON──► Worker (Hono) ──► D1 (devices, facts)
    └─ ~/.loam/install.json  安装清单，供 doctor / uninstall
 ```
 
+## 记忆模型
+
+四类决定「这是什么」，三个属性决定「它现在还算不算数、排多前」：
+
+| 维度 | 取值 | 作用 |
+|---|---|---|
+| `kind` | 决策 / 坑 / 约定 / 事实 | 页面上的四列；召回时的语义 |
+| `pinned` | 0/1 | 常驻：注入与复盘优先，`prune` 不删 |
+| `importance` | 1..5（默认 3） | 排序权重，写方给出 |
+| `superseded_by` | 同 project 的新行 id | 事实级时态：旧条目退出默认召回，保留历史 |
+
+- 排序 `sort=rank`：`pinned DESC, importance DESC, created_at DESC`，只出 top-N；分页仍按时间 keyset。
+- 取代只能通过 `POST {supersedes}` 建立，PATCH 仅能取消，因此不会成环。
+- 页面「原理」视图把这条链路画成一张图，并与代码逐项对应（见 [docs/UI.md](docs/UI.md)）。
+
 ## 快速开始（本地）
 
 ```bash
 pnpm install
 cd worker
 cp .dev.vars.example .dev.vars            # 写入 ADMIN_TOKEN
-pnpm dlx wrangler d1 execute loam --local --file=./schema.sql
+pnpm dlx wrangler d1 execute loam --local --file=./schema.sql   # 全新库
+# 已有 0.1 的库只跑迁移（不要再跑 schema.sql）：
+# pnpm dlx wrangler d1 execute loam --local --file=./migrations/0002-memory-shape.sql
 pnpm dev                                   # http://127.0.0.1:8787
 
 # 另开终端
 cd ../cli
 pnpm build
 LOAM_ADMIN_TOKEN=... node dist/bin.js login --server http://127.0.0.1:8787 --name win-desktop
-node dist/bin.js add "D1 is the source of truth" --kind decision
+node dist/bin.js add "D1 is the source of truth" --kind decision --importance 5
+node dist/bin.js add "Use Hono plus D1" --kind decision --supersedes <旧条目 id>
 node dist/bin.js search "source"
 ```
 
@@ -45,12 +65,16 @@ node dist/bin.js search "source"
 ```bash
 cd worker
 pnpm dlx wrangler d1 create loam           # 把 database_id 填进 wrangler.toml
-pnpm dlx wrangler d1 execute loam --file=./schema.sql --remote
+pnpm dlx wrangler d1 execute loam --file=./schema.sql --remote   # 全新库
+# 已有 0.1 的线上库只跑迁移：
+# pnpm dlx wrangler d1 execute loam --file=./migrations/0002-memory-shape.sql --remote
 pnpm dlx wrangler secret put ADMIN_TOKEN   # 只在 /v1/activate 使用
 pnpm deploy
 ```
 
-参考部署：`https://loam.sanqian.workers.dev`（WNAM）。`ADMIN_TOKEN` 只用于发放设备 token；设备拿到 `loam_<id8>_<32B>` 后独立鉴权，撤销单台不影响其它设备。
+参考部署：`https://loam.sanqian.workers.dev`。`ADMIN_TOKEN` 只用于发放设备 token；设备拿到 `loam_<id8>_<32B>` 后独立鉴权，撤销单台不影响其它设备。
+
+升级前先 `loam export --out backup.ndjson`。新列是纯增量的，旧代码忽略它们，回滚代码不需要回滚 schema。
 
 中国大陆直连 `workers.dev` 可能超时（实测需代理）。登录时把代理写进配置，之后 CLI 自动使用（Node ≥24）：
 
@@ -76,25 +100,46 @@ loam uninstall            # 按 install.json 精确回滚
 | 命令 | 作用 |
 |---|---|
 | `login --server URL --name NAME` | 注册/轮换本机 token，写入 `~/.loamrc.json` |
-| `add "<text>" --kind …` | 记录事实，`project + kind + text` 幂等 |
-| `search "<关键词>"` | 默认 5 条、≤6 行、每行 ≤100 字符 |
-| `show <id\|前缀>` / `list` | 单条详情 / 最近 N 条 |
+| `add "<text>" --kind … --importance 1..5 [--pin] [--supersedes id]` | 记录事实，`project + kind + text` 幂等 |
+| `search "<关键词>" [--sort rank\|recent]` | 默认 5 条、≤6 行、每行 ≤100 字符；默认按常驻/热度排序 |
+| `show <id\|前缀>` / `list` | 单条详情（含常驻/取代链）/ 最近 N 条 |
 | `devices [list\|revoke\|rotate]` | 设备与 token 生命周期 |
-| `export` / `import` | NDJSON 备份与恢复 |
+| `export` / `import` | NDJSON 备份与恢复（含 pinned/importance） |
 | `flush` | 补发离线 outbox |
-| `prune --older 180d` | 软删除过期事实 |
+| `prune --older 180d` | 软删除过期事实（跳过常驻） |
 
 完整参数、退出码与环境变量见 [docs/CLI.md](docs/CLI.md)。
 
-## 记忆管理页
+## 记忆工作台
 
 部署后打开 `https://loam.sanqian.workers.dev/`，粘贴 `~/.loamrc.json` 里的 token：
 
-- 项目 / 类型 / 标签筛选，多词 AND 搜索
-- 直接记录、修订、软删除，一键导出 NDJSON
-- 设备列表与撤销（撤销当前设备会立即退出登录）
+- **工作台**：决策 / 坑 / 约定 / 事实四列，各自滚动；整页不滚动。拖卡片到另一列即改类型。
+- **检视抽屉**：全文、来源、常驻、重要度 1–5、取代状态、修订与删除（6 秒可撤销），不打断列表。
+- **捕获条**：底部常驻，project 继承当前项目；从检视栏「标为过时」进入时预填 `supersedes`。
+- **时间轴**：今天 / 近 7 天 / 近 30 天 / 更早，四段并列。
+- **复盘**：一次一张，改类型 / 固定 / 修订 / 删除 / 跳过，适合一圈扫完。
+- **原理**：一张记忆模型工作原理图（写入 → 形状 → 读取 → 维护），与代码逐项对应，并显示实时计数。
+- **双语**：界面按浏览器语言自动选择中文或英文（`localStorage` → `navigator.languages` → `en`），顶栏可切换。
 
-页面由 Workers Assets 托管（`worker/public/`），同源调用 `/v1/*`；token 只存当前浏览器的 localStorage，CSP 禁止内联脚本与外部资源。
+<details>
+<summary>界面预览（3 张，点开）</summary>
+
+**工作台 · 1440×900**
+
+![loam 工作台：四泳道、卡片与底部捕获条](docs/images/loam-board.png)
+
+**记忆模型原理图 · 1440×900**
+
+![loam 记忆模型原理图：写入、形状、读取、维护](docs/images/loam-model.png)
+
+**移动端 · 390×844**
+
+![loam 移动端：单列横向 snap 与底部捕获](docs/images/loam-mobile.png)
+
+</details>
+
+页面由 Workers Assets 托管（`worker/public/`），同源调用 `/v1/*`；token 只存当前浏览器的 localStorage，CSP 禁止内联脚本/样式与外部资源。无构建链、无框架、无第三方前端依赖。
 
 ## 开发与验证
 
@@ -105,20 +150,21 @@ pnpm --filter @loam/worker test:offline   # 零依赖：node:sqlite 跑真实 SQ
 pnpm check:licenses              # 许可证白名单
 ```
 
-离线套件不需要 workerd：`worker/test/offline` 用 `node:sqlite` 实现 D1 形状的 adapter，直接跑 schema、幂等、keyset 分页与软删除。
+离线套件不需要 workerd：`worker/test/offline` 用 `node:sqlite` 实现 D1 形状的 adapter，直接跑 schema、幂等、取代、rank 与软删除。
+
+页面手测清单（10 项）见 [docs/UI.md](docs/UI.md)；本地样例数据用 `scripts/seed-dev.mjs`。
 
 ## 状态
 
 | 阶段 | 状态 |
 |---|---|
-| M0 骨架 + 边界 + 5 条 ADR | 完成；名字核验：`loam` 已占，最终发布名 `@yidasanqian/loam` |
-| M1 Worker + 鉴权 + facts CRUD + 限流 | 完成；vitest 官方池 17/17（401/403/429 路径、A↔B、边界、分页） |
-| M2 CLI MVP + outbox + 裁剪 | 完成；CLI 30/30；真机 login/add/search/flush/revoke 全通，search 6 行 / 80 字符上限实测 |
-| M2.5 installer + doctor + uninstall | 完成；安装/重装幂等/卸载回滚套件通过，真机 dry-run 探测三端正确 |
-| M3 三端接线 / M4 双机验收 | 三端无头会话实测命中（DSH 本会话、`claude -p`、`codex exec`，provenance 正确）；第二台物理机未联调 |
-| M5 CI / license 检查 / 发布 | `@yidasanqian/loam@0.1.0` 已发布；CI + 自动部署通过；0.1.1 用于验证 OIDC 发布 |
-
-验证命令与结果见下节；实测环境：Node 24.19、pnpm 11.28、wrangler 4.162、Windows 11。
+| M0 骨架 + 边界 + ADR | 完成 |
+| M1 Worker + 鉴权 + facts CRUD + 限流 | 完成；HTTP 23/23 |
+| M2 CLI MVP + outbox + 裁剪 | 完成；CLI 32/32 |
+| M2.5 installer + doctor + uninstall | 完成 |
+| M3 三端接线 / M4 双机验收 | 三端无头会话实测命中；第二台物理机未联调 |
+| M5 CI / license / 发布 | `0.1.0`、`0.1.1` 已发布；CI + 自动部署通过 |
+| 记忆工作台 + 记忆形状（ADR-0006） | 工作区完成，未发布；离线 16/16、HTTP 23/23、CLI 32/32 |
 
 ## GitHub CI/CD
 
@@ -151,9 +197,7 @@ npm config delete //registry.npmjs.org/:_authToken
 
 > `cli/.npmrc` 与 `publishConfig.registry` 都固定到 `https://registry.npmjs.org/`。
 >
-> npm 要求「账号 2FA 或带 **Bypass 2FA** 的 Granular Token」二选一。实测 `npm login` 得到的 web token 即使加 `--otp` 仍返回 `E403`（token 发布路径无法完成交互式 2FA 挑战），所以首次发布直接用一次性 bypass token 最省事；若浏览器里的 2FA 能正常完成，也可以 `npm login && npm publish` 走 OTP。
->
-> 长期仍建议启用可用的 2FA（TOTP）：Trusted Publisher 的配置属于包设置修改，需要交互式 2FA；配置好后 tag 发布走 OIDC，无需 token/OTP。
+> npm 要求「账号 2FA 或带 **Bypass 2FA** 的 Granular Token」二选一。实测 `npm login` 得到的 web token 即使加 `--otp` 仍返回 `E403`，所以首次发布直接用一次性 bypass token 最省事；若浏览器里的 2FA 能正常完成，也可以 `npm login && npm publish` 走 OTP。
 
 然后配置 `npmjs.com/package/@yidasanqian/loam/settings → Trusted Publisher → GitHub Actions`：
 
@@ -176,6 +220,7 @@ git tag v0.1.0 && git push --tags
 
 - [docs/SCOPE.md](docs/SCOPE.md) 范围内的能力与量化边界
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) 组件、数据流、存储
+- [docs/UI.md](docs/UI.md) 工作台版式、原理图与代码映射、手测清单
 - [docs/AUTH.md](docs/AUTH.md) 设备 token、撤销、限流
 - [docs/CLI.md](docs/CLI.md) 命令参考
 - [docs/INSTALL.md](docs/INSTALL.md) 三端接线与回滚

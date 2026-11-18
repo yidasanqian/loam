@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="color-scheme" content="light">
     <title>loam · 项目记忆</title>
-    <meta name="description" content="loam 记忆管理：检索、记录、修订与撤销设备。">
+    <meta name="description" content="loam 记忆工作台：检索、记录、修订、复盘与原理说明。">
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%233f6b4f'/%3E%3Cpath d='M8 11h16M8 16h16M8 21h10' stroke='%23f6f3ec' stroke-width='2.4' stroke-linecap='round'/%3E%3C/svg%3E">
     <link rel="stylesheet" href="/styles.css">
   </head>
@@ -19,27 +19,25 @@
           </svg>
           <span>loam</span>
         </div>
-        <h1>接上你的项目记忆</h1>
-        <p class="lede">决策、坑与约定沉淀成一层壤土，跨设备、多种 harness 共用同一份。</p>
+        <h1 data-i18n="gate.title">接上你的项目记忆</h1>
+        <p class="lede" data-i18n="gate.lede">决策、坑与约定沉淀成一层壤土，跨设备、多种 harness 共用同一份。</p>
 
         <form id="gate-form" class="gate-form">
-          <label for="token">设备 token</label>
+          <label for="token" data-i18n="gate.label">设备 token</label>
           <input id="token" name="token" type="password" autocomplete="off" spellcheck="false" placeholder="loam_xxxxxxxx_…">
-          <button type="submit" class="btn primary">连接</button>
+          <button type="submit" class="btn primary" data-i18n="gate.connect">连接</button>
           <p id="gate-error" class="form-error" role="alert"></p>
         </form>
 
         <details class="gate-help">
-          <summary>token 从哪里来？</summary>
-          <p>本机已登录时，打开 <code>~/.loamrc.json</code> 复制 <code>token</code>；或运行：</p>
-          <pre><code>loam login --server https://loam.sanqian.workers.dev --name 本机名</code></pre>
-          <p>token 只保存在这个浏览器（localStorage），请求只发往当前域名。服务端明文存储记忆，不要写入密钥。</p>
+          <summary data-i18n="gate.help">token 从哪里来？</summary>
+          <p data-i18n="gate.helpBody">本机已登录时，打开 ~/.loamrc.json 复制 token；或运行 loam login --server … --name 本机名。</p>
         </details>
       </div>
-      <p class="gate-foot mono">loam v0.1 · Workers + D1</p>
+      <p class="gate-foot mono">loam · Workers + D1</p>
     </div>
 
-    <div id="app" class="shell" hidden>
+    <div id="app" class="app" hidden>
       <header class="topbar">
         <div class="wordmark small">
           <svg viewBox="0 0 32 32" width="22" height="22" aria-hidden="true">
@@ -48,146 +46,326 @@
           </svg>
           <span>loam</span>
         </div>
-        <p class="device mono"><span id="device-name">…</span><span class="dot-sep">·</span><span id="device-id">…</span></p>
+
+        <div class="project-switch">
+          <button id="project-button" class="project-button" type="button" aria-haspopup="true" aria-expanded="false">
+            <span class="project-label" data-i18n="topbar.project">项目</span>
+            <strong id="project-name">—</strong>
+            <span class="caret" aria-hidden="true">▾</span>
+          </button>
+          <div id="project-menu" class="project-menu" hidden>
+            <input id="project-filter" type="search" data-i18n-placeholder="topbar.projectFilter" placeholder="筛选项目" autocomplete="off">
+            <ul id="project-list" class="project-list" aria-label="projects"></ul>
+            <p id="projects-empty" class="menu-empty" data-i18n="topbar.noProject" hidden>还没有项目</p>
+          </div>
+        </div>
+
+        <nav class="view-tabs" role="tablist" aria-label="views">
+          <button class="view-tab is-active" type="button" role="tab" data-view="board" data-i18n="view.board">工作台</button>
+          <button class="view-tab" type="button" role="tab" data-view="timeline" data-i18n="view.timeline">时间轴</button>
+          <button class="view-tab" type="button" role="tab" data-view="triage" data-i18n="view.triage">复盘</button>
+          <button class="view-tab" type="button" role="tab" data-view="model" data-i18n="view.model">原理</button>
+        </nav>
+
         <div class="top-actions">
-          <button id="export" class="btn ghost" type="button">导出 NDJSON</button>
-          <button id="open-devices" class="btn ghost" type="button">设备</button>
-          <button id="logout" class="btn ghost danger" type="button">退出</button>
+          <button id="search-open" class="btn ghost" type="button" data-i18n="topbar.search">搜索</button>
+          <button id="lang-toggle" class="btn ghost mono" type="button" data-i18n-aria="topbar.lang" aria-label="切换语言">EN</button>
+          <button id="devices-open" class="btn ghost" type="button" data-i18n="topbar.devices">设备</button>
+          <button id="export" class="btn ghost" type="button" data-i18n="topbar.export">导出</button>
+          <button id="logout" class="btn ghost danger" type="button" data-i18n="topbar.logout">退出</button>
         </div>
       </header>
 
-      <aside class="rail">
-        <div class="rail-heading">
-          <h2>项目</h2>
-          <button id="all-projects" class="link" type="button">全部</button>
-        </div>
-        <ul id="projects" class="project-list" aria-label="项目列表"></ul>
-        <p id="projects-empty" class="rail-empty" hidden>还没有记忆</p>
+      <div id="banner" class="banner" hidden>
+        <span id="banner-text" data-i18n="banner.offline">连不上服务端，检查网络或代理。</span>
+        <button id="banner-retry" class="btn ghost" type="button" data-i18n="banner.retry">重试</button>
+      </div>
 
-        <div class="rail-heading"><h2>类型</h2></div>
-        <div id="kinds" class="kind-filter" role="group" aria-label="按类型筛选">
-          <button type="button" class="chip is-active" data-kind="">全部</button>
-          <button type="button" class="chip" data-kind="decision"><span class="kind-dot decision"></span>决策</button>
-          <button type="button" class="chip" data-kind="pitfall"><span class="kind-dot pitfall"></span>坑</button>
-          <button type="button" class="chip" data-kind="convention"><span class="kind-dot convention"></span>约定</button>
-          <button type="button" class="chip" data-kind="fact"><span class="kind-dot fact"></span>事实</button>
-        </div>
+      <section id="pinned" class="pinned-strip" hidden>
+        <h2 class="pinned-title"><span class="pin-mark">★</span><span data-i18n="pinned.title">常驻</span><span id="pinned-count" class="mono"></span></h2>
+        <ul id="pinned-list" class="pinned-list"></ul>
+      </section>
 
-        <label class="tag-field" for="tag">标签
-          <input id="tag" type="search" placeholder="installer" autocomplete="off">
-        </label>
-
-        <div class="rail-stats">
-          <span id="total-count" class="mono">—</span>
-          <span>条可检索记忆</span>
-        </div>
-      </aside>
-
-      <main class="main">
-        <div class="search-row">
-          <div class="search">
-            <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.5" fill="none" stroke="currentColor" stroke-width="1.6"></circle><path d="M13 13l4 4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"></path></svg>
-            <input id="q" type="search" placeholder="搜索记忆：关键词、坑、决策…" autocomplete="off" aria-label="搜索记忆">
+      <main id="views" class="views">
+        <section id="view-board" class="view board">
+          <div class="board-empty" id="board-empty" hidden>
+            <h2 data-i18n="board.emptyTitle">这里还是空地</h2>
+            <p data-i18n="board.emptyHint">用下方输入框记第一条决策、坑或约定。</p>
           </div>
-          <button id="refresh" class="btn ghost" type="button">刷新</button>
-        </div>
+          <div id="lanes" class="lanes"></div>
+        </section>
 
-        <section class="composer" aria-label="记录一条事实">
-          <textarea id="new-text" rows="2" placeholder="记录一条事实：一句话，越具体越有用。" aria-label="事实内容"></textarea>
-          <div class="composer-row">
-            <label class="sr-only" for="new-kind">类型</label>
-            <select id="new-kind" class="select">
-              <option value="fact">事实</option>
-              <option value="decision">决策</option>
-              <option value="pitfall">坑</option>
-              <option value="convention">约定</option>
-            </select>
-            <label class="sr-only" for="new-tags">标签</label>
-            <input id="new-tags" class="tags-input" placeholder="tags, 逗号分隔" autocomplete="off">
-            <label class="sr-only" for="new-project">项目</label>
-            <input id="new-project" class="project-input mono" list="project-options" placeholder="project" autocomplete="off" spellcheck="false">
-            <datalist id="project-options"></datalist>
+        <section id="view-timeline" class="view timeline" hidden>
+          <div id="buckets" class="lanes timeline-lanes"></div>
+          <p id="timeline-empty" class="empty" data-i18n="timeline.empty" hidden>这段时间没有记录。</p>
+        </section>
+
+        <section id="view-triage" class="view triage" hidden>
+          <div class="triage-head">
+            <p id="triage-progress" class="mono"></p>
+            <p class="triage-hint" data-i18n="triage.hint">一次一张：改类型、固定、修订，或跳过。</p>
           </div>
-          <div class="composer-actions">
-            <p class="composer-hint mono">project 必填 · Ctrl/⌘ + Enter 记录</p>
-            <button id="add" class="btn primary" type="button">记录</button>
+          <article id="triage-card" class="triage-card" hidden>
+            <p id="triage-meta" class="triage-meta mono"></p>
+            <p id="triage-text" class="triage-text"></p>
+            <div id="triage-tags" class="tags"></div>
+          </article>
+          <p id="triage-empty" class="empty" data-i18n="triage.empty" hidden>没有待复盘的条目。</p>
+          <div class="triage-kinds" id="triage-kinds" role="group" aria-label="kind"></div>
+          <div class="triage-actions">
+            <button id="triage-prev" class="btn ghost" type="button" data-i18n="triage.prev">上一个</button>
+            <button id="triage-next" class="btn ghost" type="button" data-i18n="triage.next">下一个</button>
+            <button id="triage-pin" class="btn ghost" type="button" data-i18n="triage.pin">固定</button>
+            <button id="triage-edit" class="btn ghost" type="button" data-i18n="triage.edit">修订</button>
+            <button id="triage-delete" class="btn ghost danger" type="button" data-i18n="triage.delete">删除</button>
+            <button id="triage-skip" class="btn ghost" type="button" data-i18n="triage.skip">跳过</button>
           </div>
         </section>
 
-        <div id="list" class="list" aria-live="polite"></div>
-        <div class="pager">
-          <button id="more" class="btn ghost" type="button" hidden>加载更多</button>
-          <p id="list-foot" class="list-foot mono"></p>
-        </div>
-      </main>
-    </div>
+        <section id="view-model" class="view model" hidden>
+          <figure class="model-figure">
+            <svg class="model-svg" viewBox="0 0 1000 560" role="img" aria-labelledby="model-title model-desc">
+              <title id="model-title" data-i18n="model.title">记忆模型工作原理</title>
+              <desc id="model-desc" data-i18n="model.desc">一条记忆从写入到被召回：哈希去重决定是否新增，常驻与热度决定排序，取代决定旧条目是否还出现，裁剪决定进入上下文多少行。</desc>
+              <defs>
+                <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                  <path d="M0 0 L10 5 L0 10 z" class="d-arrowhead"></path>
+                </marker>
+              </defs>
 
-    <dialog id="edit-dialog" class="dialog">
-      <form id="edit-form" method="dialog">
-        <h2>修订记忆</h2>
-        <label for="edit-text">内容</label>
-        <textarea id="edit-text" rows="5" required></textarea>
-        <div class="dialog-row">
-          <label for="edit-kind">类型
-            <select id="edit-kind" class="select">
-              <option value="fact">事实</option>
-              <option value="decision">决策</option>
-              <option value="pitfall">坑</option>
-              <option value="convention">约定</option>
-            </select>
-          </label>
-          <label for="edit-tags">标签
-            <input id="edit-tags" class="tags-input" autocomplete="off">
-          </label>
+              <text class="d-band" x="24" y="30" data-i18n="model.band.write">① 写入</text>
+              <text class="d-band" x="320" y="30" data-i18n="model.band.shape">② 记忆的形状</text>
+              <text class="d-band" x="660" y="30" data-i18n="model.band.read">③ 读取</text>
+
+              <g class="d-node">
+                <rect x="24" y="44" width="276" height="86" rx="10"></rect>
+                <text class="d-title" x="38" y="68" data-i18n="model.write.entry">四个入口</text>
+                <text class="d-text" x="38" y="92">DSH · Claude Code · Codex · Web</text>
+                <text class="d-muted" x="38" y="114" data-i18n="model.write.entryHint">同一 project 共用同一份</text>
+              </g>
+              <line class="d-line" x1="162" y1="130" x2="162" y2="160" marker-end="url(#arrow)"></line>
+
+              <g class="d-node">
+                <rect x="24" y="162" width="276" height="64" rx="10"></rect>
+                <text class="d-title" x="38" y="186" data-i18n="model.write.normalize">规范化 + 哈希</text>
+                <text class="d-mono" x="38" y="208">sha256(project · kind · text)</text>
+              </g>
+              <line class="d-line" x1="162" y1="226" x2="162" y2="252" marker-end="url(#arrow)"></line>
+
+              <g class="d-node d-node-accent">
+                <rect x="24" y="254" width="276" height="74" rx="10"></rect>
+                <text class="d-title" x="38" y="278" data-i18n="model.write.unique">唯一索引</text>
+                <text class="d-mono" x="38" y="299">UNIQUE(project, hash)</text>
+                <text class="d-muted" x="38" y="318" data-i18n="model.write.dedupe">重复写入 → 读回原行</text>
+              </g>
+              <line class="d-line" x1="300" y1="291" x2="318" y2="291" marker-end="url(#arrow)"></line>
+
+              <g class="d-node">
+                <rect x="320" y="118" width="324" height="242" rx="12"></rect>
+                <text class="d-title" x="336" y="144" data-i18n="model.shape.title">一条记忆 = 一句话 + 元数据</text>
+                <g class="d-row"><rect x="336" y="158" width="292" height="26" rx="7"></rect><text class="d-text" x="350" y="176" data-i18n="model.shape.kind">kind · 决策 / 坑 / 约定 / 事实</text></g>
+                <g class="d-row"><rect x="336" y="190" width="292" height="26" rx="7"></rect><text class="d-text" x="350" y="208" data-i18n="model.shape.pinned">★ pinned · 常驻，注入优先</text></g>
+                <g class="d-row"><rect x="336" y="222" width="292" height="26" rx="7"></rect><text class="d-text" x="350" y="240" data-i18n="model.shape.importance">importance · 1–5 热度，默认 3</text></g>
+                <g class="d-row"><rect x="336" y="254" width="292" height="26" rx="7"></rect><text class="d-text" x="350" y="272" data-i18n="model.shape.state">superseded_by · 时态</text></g>
+                <text class="d-muted" x="336" y="306" data-i18n="model.shape.note">四类决定它站在哪一列；三个属性决定它是否被召回、排多前。</text>
+                <text class="d-muted" x="336" y="326" data-i18n="model.shape.note2">project 是隔离边界：不同项目互不可见。</text>
+              </g>
+              <line class="d-line" x1="644" y1="190" x2="658" y2="160" marker-end="url(#arrow)"></line>
+
+              <text class="d-text" x="320" y="392" data-i18n="model.shape.supersede">新条目 ──取代──► 旧条目</text>
+              <text class="d-muted" x="320" y="412" data-i18n="model.shape.hidden">旧条目退出默认召回，仍可在历史里查看</text>
+              <line class="d-line d-line-dashed" x1="404" y1="360" x2="404" y2="376" marker-end="url(#arrow)"></line>
+
+              <g class="d-node">
+                <rect x="660" y="118" width="316" height="62" rx="10"></rect>
+                <text class="d-title" x="674" y="142" data-i18n="model.read.recall">召回</text>
+                <text class="d-mono" x="674" y="164">project + kind / tag / q</text>
+              </g>
+              <line class="d-line" x1="818" y1="180" x2="818" y2="204" marker-end="url(#arrow)"></line>
+              <g class="d-node">
+                <rect x="660" y="206" width="316" height="62" rx="10"></rect>
+                <text class="d-title" x="674" y="230" data-i18n="model.read.rank">排序</text>
+                <text class="d-text" x="674" y="252" data-i18n="model.read.rankBy">★ &gt; 热度 &gt; 时间</text>
+              </g>
+              <line class="d-line" x1="818" y1="268" x2="818" y2="292" marker-end="url(#arrow)"></line>
+              <g class="d-node">
+                <rect x="660" y="294" width="316" height="62" rx="10"></rect>
+                <text class="d-title" x="674" y="318" data-i18n="model.read.clip">裁剪</text>
+                <text class="d-text" x="674" y="340" data-i18n="model.read.clipBy">≤5 条 · ≤6 行 · 每行 100 字</text>
+              </g>
+              <line class="d-line" x1="818" y1="356" x2="818" y2="380" marker-end="url(#arrow)"></line>
+              <g class="d-node">
+                <rect x="660" y="382" width="316" height="70" rx="10"></rect>
+                <text class="d-text" x="674" y="406" data-i18n="model.read.inject">harness 注入：≤3 条，★ 优先</text>
+                <text class="d-text" x="674" y="432" data-i18n="model.read.lanes">页面泳道：按时间倒序</text>
+              </g>
+
+              <g class="d-node d-node-keep">
+                <rect x="24" y="460" width="952" height="78" rx="12"></rect>
+                <text class="d-title" x="38" y="485" data-i18n="model.band.keep">④ 维护与同步</text>
+                <text class="d-text" x="196" y="485" data-i18n="model.keep.outbox">断网 → outbox → flush</text>
+                <text class="d-muted" x="196" y="505" data-i18n="model.keep.outboxLine">幂等重放，不重复写</text>
+                <text class="d-text" x="446" y="485" data-i18n="model.keep.prune">prune --older 180d</text>
+                <text class="d-muted" x="446" y="505" data-i18n="model.keep.pruneLine">跳过 ★ 常驻</text>
+                <text class="d-text" x="656" y="485" data-i18n="model.keep.delete">软删除 / 撤销</text>
+                <text class="d-muted" x="656" y="505" data-i18n="model.keep.deleteLine">同文本重新写入即恢复</text>
+                <text class="d-text" x="846" y="485">export / import</text>
+                <text class="d-muted" x="846" y="505">NDJSON</text>
+              </g>
+            </svg>
+            <figcaption data-i18n="model.caption">写入按项目去重，召回按常驻与热度排序并按行数裁剪；被取代的条目留在历史里，不再进入上下文。</figcaption>
+          </figure>
+
+          <p id="model-live" class="model-live mono"></p>
+
+          <div class="model-grid">
+            <article class="legend">
+              <h3><span class="kind-dot decision"></span><span data-i18n="kind.decision">决策</span></h3>
+              <p data-i18n="kind.decision.desc">做过选择并且要长期遵守的结论。</p>
+            </article>
+            <article class="legend">
+              <h3><span class="kind-dot pitfall"></span><span data-i18n="kind.pitfall">坑</span></h3>
+              <p data-i18n="kind.pitfall.desc">踩过一次、还会再踩的坑。</p>
+            </article>
+            <article class="legend">
+              <h3><span class="kind-dot convention"></span><span data-i18n="kind.convention">约定</span></h3>
+              <p data-i18n="kind.convention.desc">项目里的惯例与写法。</p>
+            </article>
+            <article class="legend">
+              <h3><span class="kind-dot fact"></span><span data-i18n="kind.fact">事实</span></h3>
+              <p data-i18n="kind.fact.desc">中性的观察与事实。</p>
+            </article>
+            <article class="legend">
+              <h3>★ <span data-i18n="shape.pinned">常驻</span></h3>
+              <p data-i18n="shape.pinned.desc">注入上下文时优先，prune 不删。</p>
+            </article>
+            <article class="legend">
+              <h3>1–5 <span data-i18n="shape.importance">热度</span></h3>
+              <p data-i18n="shape.importance.desc">排序权重，1 低 5 高，默认 3。</p>
+            </article>
+            <article class="legend">
+              <h3>⇥ <span data-i18n="shape.supersede">取代</span></h3>
+              <p data-i18n="shape.supersede.desc">新条目代替旧条目，旧条目退出默认召回。</p>
+            </article>
+          </div>
+        </section>
+      </main>
+
+      <form id="capture" class="capture">
+        <div id="capture-target" class="capture-target" hidden>
+          <span id="capture-target-text"></span>
+          <button id="capture-clear" class="btn-mini" type="button" data-i18n="capture.clearTarget">取消取代</button>
         </div>
-        <p class="dialog-hint">修改会重算幂等 hash；与既有事实重复时服务端会拒绝。</p>
-        <div class="dialog-actions">
-          <button type="button" id="edit-cancel" class="btn ghost">取消</button>
-          <button type="submit" class="btn primary" id="edit-save">保存</button>
+        <textarea id="new-text" rows="1" data-i18n-placeholder="capture.placeholder" placeholder="记一条：什么决定、什么坑、什么约定…"></textarea>
+        <div class="capture-row">
+          <div id="new-kind-group" class="kind-picker" role="group" aria-label="kind"></div>
+          <input id="new-tags" class="tags-input" data-i18n-placeholder="capture.tags" placeholder="标签，逗号分隔" autocomplete="off">
+          <input id="new-project" class="project-input mono" list="project-options" data-i18n-placeholder="capture.project" placeholder="project" autocomplete="off" spellcheck="false">
+          <datalist id="project-options"></datalist>
+          <button id="add" class="btn primary" type="submit" data-i18n="capture.add">记录</button>
         </div>
       </form>
+    </div>
+
+    <dialog id="inspector" class="inspector">
+      <header class="inspector-head">
+        <span id="inspector-dot" class="kind-dot"></span>
+        <strong id="inspector-kind"></strong>
+        <span id="inspector-age" class="mono"></span>
+        <button id="inspector-close" class="btn-mini" type="button" data-i18n="inspector.close">关闭</button>
+      </header>
+      <div class="inspector-body">
+        <p id="inspector-text" class="inspector-text"></p>
+        <div id="inspector-tags" class="tags"></div>
+        <p id="inspector-meta" class="mono"></p>
+        <section id="inspector-chain" class="chain" hidden>
+          <h3 data-i18n="inspector.chain">时态</h3>
+          <p id="inspector-chain-body"></p>
+          <button id="inspector-release" class="btn-mini" type="button" data-i18n="inspector.release">取消取代</button>
+        </section>
+        <section id="edit-panel" class="edit-panel" hidden>
+          <label for="edit-text" data-i18n="inspector.editLabel">内容</label>
+          <textarea id="edit-text" rows="6"></textarea>
+          <label for="edit-tags" data-i18n="inspector.tagsLabel">标签</label>
+          <input id="edit-tags" autocomplete="off">
+          <div class="edit-actions">
+            <button id="edit-cancel" class="btn ghost" type="button" data-i18n="common.cancel">取消</button>
+            <button id="edit-save" class="btn primary" type="button" data-i18n="common.save">保存</button>
+          </div>
+        </section>
+      </div>
+      <footer class="inspector-foot">
+        <div id="importance" class="importance" role="group" aria-label="importance"></div>
+        <div class="inspector-actions">
+          <button id="pin-toggle" class="btn ghost" type="button"></button>
+          <button id="edit-open" class="btn ghost" type="button" data-i18n="inspector.edit">修订</button>
+          <button id="supersede" class="btn ghost" type="button" data-i18n="inspector.supersede">标为过时</button>
+          <button id="copy-id" class="btn ghost" type="button" data-i18n="inspector.copyId">复制 ID</button>
+          <button id="delete" class="btn ghost danger" type="button" data-i18n="common.delete">删除</button>
+        </div>
+      </footer>
     </dialog>
 
-    <dialog id="devices-dialog" class="dialog wide">
+    <dialog id="search-dialog" class="search-dialog">
+      <input id="search-input" type="search" data-i18n-placeholder="search.placeholder" placeholder="搜索记忆：关键词、坑、决策…" autocomplete="off">
+      <ul id="search-results" class="search-results"></ul>
+      <p id="search-empty" class="menu-empty" data-i18n="search.empty" hidden>没有命中，换个词试试。</p>
+      <p class="search-hint" data-i18n="search.hint">点一条打开详情；搜索按词 AND 匹配，最多 20 条。</p>
+    </dialog>
+
+    <dialog id="devices-dialog" class="devices-dialog">
       <div class="dialog-head">
-        <h2>设备与 token</h2>
-        <button type="button" id="devices-close" class="btn ghost">关闭</button>
+        <h2 data-i18n="devices.title">设备与 token</h2>
+        <button id="devices-close" class="btn ghost" type="button" data-i18n="devices.close">关闭</button>
       </div>
-      <p class="dialog-hint">撤销立即生效，只影响该设备；当前设备被撤销后需要重新登录。</p>
+      <p class="dialog-hint" data-i18n="devices.hint">撤销立即生效，只影响该设备；当前设备被撤销后需要重新登录。</p>
       <div class="table-wrap">
         <table class="device-table">
-          <thead><tr><th>ID</th><th>设备</th><th>权限</th><th>最近活跃</th><th></th></tr></thead>
+          <thead>
+            <tr>
+              <th data-i18n="devices.id">ID</th>
+              <th data-i18n="devices.name">设备</th>
+              <th data-i18n="devices.scopes">权限</th>
+              <th data-i18n="devices.seen">最近活跃</th>
+              <th></th>
+            </tr>
+          </thead>
           <tbody id="device-rows"></tbody>
         </table>
       </div>
       <p id="devices-error" class="form-error" role="alert"></p>
     </dialog>
 
-    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+    <div id="toast" class="toast" role="status" aria-live="polite">
+      <span id="toast-text"></span>
+      <button id="toast-undo" class="btn-mini" type="button" hidden data-i18n="common.undo">撤销</button>
+    </div>
 
-    <template id="fact-template">
-      <article class="fact">
-        <div class="fact-kind"><span class="kind-dot"></span><span class="kind-label"></span></div>
-        <div class="fact-body">
-          <p class="fact-text"></p>
-          <ul class="fact-tags"></ul>
-          <p class="fact-meta">
-            <span class="meta-harness"></span><span class="dot-sep">·</span>
-            <span class="meta-device"></span><span class="dot-sep">·</span>
-            <time class="meta-time"></time><span class="dot-sep">·</span>
-            <code class="meta-id"></code>
-          </p>
-        </div>
-        <div class="fact-actions">
-          <button type="button" class="btn-mini" data-action="edit">修订</button>
-          <button type="button" class="btn-mini" data-action="copy">复制 ID</button>
-          <button type="button" class="btn-mini danger" data-action="delete">删除</button>
+    <template id="card-template">
+      <article class="card" tabindex="0" draggable="true">
+        <p class="card-text"></p>
+        <div class="card-meta">
+          <span class="pin-mark" hidden>★</span>
+          <span class="tags"></span>
+          <span class="imp" data-level="3" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>
+          <span class="card-age mono"></span>
         </div>
       </article>
     </template>
 
+    <template id="lane-template">
+      <section class="lane">
+        <header class="lane-head">
+          <h2 class="lane-title"><span class="kind-dot"></span><span class="lane-name"></span><span class="lane-count mono"></span></h2>
+          <button class="lane-add btn-mini" type="button">＋</button>
+        </header>
+        <div class="lane-list"></div>
+        <button class="lane-more btn ghost" type="button" hidden></button>
+      </section>
+    </template>
+
     <template id="project-template">
-      <li><button type="button" class="project"><span class="project-name"></span><span class="project-count mono"></span></button></li>
+      <li><button class="project" type="button"><span class="project-name"></span><span class="project-count mono"></span></button></li>
     </template>
 
     <template id="device-template">
@@ -196,10 +374,14 @@
         <td class="device-name"></td>
         <td class="mono device-scopes"></td>
         <td class="device-seen"></td>
-        <td><button type="button" class="btn-mini danger" data-action="revoke">撤销</button></td>
+        <td><button class="btn-mini danger" type="button" data-action="revoke"></button></td>
       </tr>
     </template>
 
-    <script src="/app.js" defer></script>
+    <template id="result-template">
+      <li><button class="result" type="button"><span class="kind-dot"></span><span class="result-text"></span><span class="result-meta mono"></span></button></li>
+    </template>
+
+    <script type="module" src="/app.js"></script>
   </body>
 </html>

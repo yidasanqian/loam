@@ -1,13 +1,16 @@
 import { ApiFailure } from './errors.ts';
 import {
+  DEFAULT_IMPORTANCE,
   DEFAULT_LIMIT,
   FACT_KINDS,
+  MAX_IMPORTANCE,
   MAX_LIMIT,
   MAX_PROJECT_LEN,
   MAX_TAG_LEN,
   MAX_TAGS,
   MAX_TEXT_BYTES,
   type FactKind,
+  type SortMode,
 } from './model.ts';
 
 const PROJECT_RE = /^[A-Za-z0-9._@:/-]+$/;
@@ -81,6 +84,20 @@ export function validateHarness(value: unknown): string {
   return harness;
 }
 
+export function validateImportance(value: unknown): number {
+  if (value === undefined || value === null) return DEFAULT_IMPORTANCE;
+  if (typeof value !== 'number' || !Number.isInteger(value) || value < 1 || value > MAX_IMPORTANCE) {
+    throw new ApiFailure(400, 'invalid_field', `importance must be an integer in 1..${MAX_IMPORTANCE}`);
+  }
+  return value;
+}
+
+export function validatePinned(value: unknown): boolean {
+  if (value === undefined || value === null) return false;
+  if (typeof value !== 'boolean') throw new ApiFailure(400, 'invalid_field', 'pinned must be a boolean');
+  return value;
+}
+
 export function validateDeviceName(value: unknown): string {
   const name = asString(value, 'name', 64);
   if (!DEVICE_NAME_RE.test(name)) throw new ApiFailure(400, 'invalid_field', 'name may only contain letters, digits, ._-');
@@ -93,6 +110,8 @@ export interface FactInput {
   text: string;
   tags: string[];
   harness: string;
+  pinned: boolean;
+  importance: number;
 }
 
 export function validateFactInput(body: unknown): FactInput {
@@ -109,6 +128,8 @@ export function validateFactInput(body: unknown): FactInput {
     text,
     tags: validateTags(obj.tags),
     harness: validateHarness(obj.harness),
+    pinned: validatePinned(obj.pinned),
+    importance: validateImportance(obj.importance),
   };
 }
 
@@ -116,6 +137,9 @@ export interface FactPatch {
   text?: string;
   kind?: FactKind;
   tags?: string[];
+  pinned?: boolean;
+  importance?: number;
+  supersededBy?: null;
 }
 
 export function validateFactPatch(body: unknown): FactPatch {
@@ -130,8 +154,24 @@ export function validateFactPatch(body: unknown): FactPatch {
   }
   if ('kind' in obj) patch.kind = validateKind(obj.kind);
   if ('tags' in obj) patch.tags = validateTags(obj.tags);
-  if (patch.text === undefined && patch.kind === undefined && patch.tags === undefined) {
-    throw new ApiFailure(400, 'invalid_body', 'nothing to update: provide text, kind or tags');
+  if ('pinned' in obj) {
+    if (typeof obj.pinned !== 'boolean') throw new ApiFailure(400, 'invalid_field', 'pinned must be a boolean');
+    patch.pinned = obj.pinned;
+  }
+  if ('importance' in obj) {
+    if (typeof obj.importance !== 'number' || !Number.isInteger(obj.importance) || obj.importance < 1 || obj.importance > MAX_IMPORTANCE) {
+      throw new ApiFailure(400, 'invalid_field', `importance must be an integer in 1..${MAX_IMPORTANCE}`);
+    }
+    patch.importance = obj.importance;
+  }
+  if ('supersededBy' in obj) {
+    if (obj.supersededBy !== null) {
+      throw new ApiFailure(400, 'unsupported_supersede', 'a fact can only be un-superseded here; create a new fact with `supersedes`');
+    }
+    patch.supersededBy = null;
+  }
+  if (Object.keys(patch).length === 0) {
+    throw new ApiFailure(400, 'invalid_body', 'nothing to update: provide text, kind, tags, pinned, importance or supersededBy');
   }
   return patch;
 }
@@ -141,6 +181,9 @@ export interface SearchParams {
   kind: FactKind | null;
   tag: string | null;
   q: string | null;
+  sort: SortMode;
+  pinnedOnly: boolean;
+  includeSuperseded: boolean;
   limit: number;
   cursor: string | null;
 }
@@ -154,13 +197,26 @@ function parseLimit(raw: string | null, fallback: number, max: number): number {
   return n;
 }
 
+function parseFlag(raw: string | null): boolean {
+  return raw === '1' || raw === 'true';
+}
+
 export function parseSearchParams(params: URLSearchParams, opts: { defaultLimit?: number; maxLimit?: number } = {}): SearchParams {
-  const all = params.get('all') === '1' || params.get('all') === 'true';
+  const all = parseFlag(params.get('all'));
   const projectRaw = params.get('project');
   if (!all && !projectRaw) throw new ApiFailure(400, 'invalid_field', 'project is required (or pass all=1)');
   const kindRaw = params.get('kind');
   const tagRaw = params.get('tag');
   const qRaw = params.get('q');
+  const sortRaw = params.get('sort');
+  if (sortRaw && sortRaw !== 'recent' && sortRaw !== 'rank') {
+    throw new ApiFailure(400, 'invalid_field', 'sort must be recent or rank');
+  }
+  const sort: SortMode = sortRaw === 'rank' ? 'rank' : 'recent';
+  const cursor = params.get('cursor');
+  if (sort === 'rank' && cursor) {
+    throw new ApiFailure(400, 'invalid_cursor', 'cursor cannot be combined with sort=rank (rank is top-N only)');
+  }
   if (tagRaw && !TAG_RE.test(tagRaw)) throw new ApiFailure(400, 'invalid_field', 'tag must be 1-32 chars without spaces or commas');
   if (qRaw && qRaw.trim().length > 100) throw new ApiFailure(400, 'invalid_field', 'q is too long (max 100)');
   return {
@@ -168,8 +224,11 @@ export function parseSearchParams(params: URLSearchParams, opts: { defaultLimit?
     kind: kindRaw ? validateKind(kindRaw) : null,
     tag: tagRaw ? tagRaw.trim().toLowerCase() : null,
     q: qRaw && qRaw.trim() ? qRaw.trim() : null,
+    sort,
+    pinnedOnly: parseFlag(params.get('pinned')),
+    includeSuperseded: parseFlag(params.get('include_superseded')),
     limit: parseLimit(params.get('limit'), opts.defaultLimit ?? DEFAULT_LIMIT, opts.maxLimit ?? MAX_LIMIT),
-    cursor: params.get('cursor'),
+    cursor,
   };
 }
 

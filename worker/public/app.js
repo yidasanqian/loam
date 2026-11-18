@@ -1,23 +1,25 @@
-'use strict';
+/**
+ * App shell: state, router, API, capture, inspector actions, language switch.
+ * No framework, no build step; views.js renders, overlays.js owns the dialogs.
+ */
+
+import {
+  applyTranslations,
+  formatAge,
+  formatDate,
+  getLanguage,
+  loadLanguage,
+  otherLanguage,
+  saveLanguage,
+  setLanguage,
+  t,
+} from './i18n.js';
+import { bindSearch, openDevices, openSearch } from './overlays.js';
+import { fillInspector, renderBoard, renderModel, renderPinned, renderTimeline, renderTriage } from './views.js';
 
 const TOKEN_KEY = 'loam.token';
-const KIND_LABEL = { decision: '决策', pitfall: '坑', convention: '约定', fact: '事实' };
-const PAGE_SIZE = 20;
+const KINDS = ['decision', 'pitfall', 'convention', 'fact'];
 const $ = (selector, root = document) => root.querySelector(selector);
-
-const state = {
-  token: '',
-  me: null,
-  projects: [],
-  project: null,
-  kind: '',
-  tag: '',
-  q: '',
-  facts: [],
-  cursor: null,
-};
-
-let loadSeq = 0;
 
 const els = {
   gate: $('#gate'),
@@ -25,47 +27,123 @@ const els = {
   token: $('#token'),
   gateError: $('#gate-error'),
   app: $('#app'),
-  deviceName: $('#device-name'),
-  deviceId: $('#device-id'),
-  projectList: $('#projects'),
+  projectButton: $('#project-button'),
+  projectName: $('#project-name'),
+  projectMenu: $('#project-menu'),
+  projectFilter: $('#project-filter'),
+  projectList: $('#project-list'),
   projectsEmpty: $('#projects-empty'),
   projectOptions: $('#project-options'),
-  allProjects: $('#all-projects'),
-  kinds: $('#kinds'),
-  tag: $('#tag'),
-  totalCount: $('#total-count'),
-  q: $('#q'),
-  refresh: $('#refresh'),
+  viewTabs: [...document.querySelectorAll('.view-tab')],
+  searchOpen: $('#search-open'),
+  langToggle: $('#lang-toggle'),
+  devicesOpen: $('#devices-open'),
+  exportBtn: $('#export'),
+  logout: $('#logout'),
+  banner: $('#banner'),
+  bannerText: $('#banner-text'),
+  bannerRetry: $('#banner-retry'),
+  pinned: $('#pinned'),
+  pinnedList: $('#pinned-list'),
+  pinnedCount: $('#pinned-count'),
+  viewBoard: $('#view-board'),
+  viewTimeline: $('#view-timeline'),
+  viewTriage: $('#view-triage'),
+  viewModel: $('#view-model'),
+  lanes: $('#lanes'),
+  boardEmpty: $('#board-empty'),
+  buckets: $('#buckets'),
+  timelineEmpty: $('#timeline-empty'),
+  triageProgress: $('#triage-progress'),
+  triageCard: $('#triage-card'),
+  triageMeta: $('#triage-meta'),
+  triageText: $('#triage-text'),
+  triageTags: $('#triage-tags'),
+  triageEmpty: $('#triage-empty'),
+  triageKinds: $('#triage-kinds'),
+  triagePrev: $('#triage-prev'),
+  triageNext: $('#triage-next'),
+  triagePin: $('#triage-pin'),
+  triageEdit: $('#triage-edit'),
+  triageDelete: $('#triage-delete'),
+  triageSkip: $('#triage-skip'),
+  modelLive: $('#model-live'),
+  capture: $('#capture'),
   newText: $('#new-text'),
-  newKind: $('#new-kind'),
+  newKindGroup: $('#new-kind-group'),
   newTags: $('#new-tags'),
   newProject: $('#new-project'),
+  captureTarget: $('#capture-target'),
+  captureTargetText: $('#capture-target-text'),
+  captureClear: $('#capture-clear'),
   add: $('#add'),
-  list: $('#list'),
-  more: $('#more'),
-  listFoot: $('#list-foot'),
-  exportBtn: $('#export'),
-  devicesBtn: $('#open-devices'),
-  logout: $('#logout'),
-  editDialog: $('#edit-dialog'),
-  editForm: $('#edit-form'),
+  inspector: $('#inspector'),
+  inspectorClose: $('#inspector-close'),
+  inspectorKind: $('#inspector-kind'),
+  inspectorDot: $('#inspector-dot'),
+  inspectorAge: $('#inspector-age'),
+  inspectorText: $('#inspector-text'),
+  inspectorTags: $('#inspector-tags'),
+  inspectorMeta: $('#inspector-meta'),
+  inspectorChain: $('#inspector-chain'),
+  inspectorChainBody: $('#inspector-chain-body'),
+  inspectorRelease: $('#inspector-release'),
+  editPanel: $('#edit-panel'),
   editText: $('#edit-text'),
-  editKind: $('#edit-kind'),
   editTags: $('#edit-tags'),
-  editCancel: $('#edit-cancel'),
   editSave: $('#edit-save'),
+  editCancel: $('#edit-cancel'),
+  editOpen: $('#edit-open'),
+  importance: $('#importance'),
+  pinToggle: $('#pin-toggle'),
+  supersede: $('#supersede'),
+  copyId: $('#copy-id'),
+  delete: $('#delete'),
+  searchDialog: $('#search-dialog'),
+  searchInput: $('#search-input'),
+  searchResults: $('#search-results'),
+  searchEmpty: $('#search-empty'),
   devicesDialog: $('#devices-dialog'),
   devicesClose: $('#devices-close'),
   deviceRows: $('#device-rows'),
   devicesError: $('#devices-error'),
   toast: $('#toast'),
-  factTemplate: $('#fact-template'),
-  projectTemplate: $('#project-template'),
-  deviceTemplate: $('#device-template'),
+  toastText: $('#toast-text'),
+  toastUndo: $('#toast-undo'),
 };
 
-let editingId = null;
-let toastTimer = 0;
+const templates = {
+  card: $('#card-template'),
+  lane: $('#lane-template'),
+  project: $('#project-template'),
+  device: $('#device-template'),
+  result: $('#result-template'),
+};
+
+const state = {
+  token: '',
+  me: null,
+  projects: [],
+  project: null,
+  view: 'board',
+  stats: null,
+  lanes: {},
+  pinned: [],
+  timeline: null,
+  triage: { queue: [], index: 0, loaded: false },
+  selected: null,
+  dragging: null,
+  captureKind: 'fact',
+  supersedes: null,
+  loadingBoard: false,
+  undo: null,
+};
+
+for (const kind of KINDS) state.lanes[kind] = { items: [], cursor: null, loading: false, error: null, seq: 0 };
+
+const VIEW_HASH = { board: 'b', timeline: 't', triage: 'r', model: 'm' };
+const HASH_VIEW = { b: 'board', t: 'timeline', r: 'triage', m: 'model' };
+const DAY = 86_400_000;
 
 /* ---------- plumbing ---------- */
 
@@ -74,13 +152,9 @@ async function request(path, { method = 'GET', body, token = state.token } = {})
   if (body !== undefined) headers['content-type'] = 'application/json';
   let response;
   try {
-    response = await fetch(path, {
-      method,
-      headers,
-      body: body === undefined ? undefined : JSON.stringify(body),
-    });
+    response = await fetch(path, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
   } catch (error) {
-    throw new Error(`网络不可用：${error instanceof Error ? error.message : 'unknown'}`);
+    throw new Error(error instanceof Error ? error.message : 'network');
   }
   const text = await response.text();
   let data = null;
@@ -97,7 +171,7 @@ async function request(path, { method = 'GET', body, token = state.token } = {})
 async function api(path, options) {
   const { response, data } = await request(path, options);
   if (response.status === 401) {
-    signOut('token 已失效，请重新连接');
+    signOut(t('gate.errorInvalid'));
     throw new Error('unauthorized');
   }
   if (!response.ok) {
@@ -109,20 +183,8 @@ async function api(path, options) {
   return data;
 }
 
-function toast(message, isError = false) {
-  els.toast.textContent = message;
-  els.toast.classList.toggle('is-error', isError);
-  els.toast.classList.add('is-shown');
-  clearTimeout(toastTimer);
-  toastTimer = window.setTimeout(() => els.toast.classList.remove('is-shown'), 3200);
-}
-
-function debounce(fn, ms) {
-  let timer = 0;
-  return (...args) => {
-    clearTimeout(timer);
-    timer = window.setTimeout(() => fn(...args), ms);
-  };
+function shortId(id) {
+  return String(id ?? '').slice(0, 8);
 }
 
 function splitTags(raw) {
@@ -134,17 +196,53 @@ function splitTags(raw) {
   return [...seen].slice(0, 8);
 }
 
-function formatTime(ms) {
-  const date = new Date(ms);
-  const pad = (n) => String(n).padStart(2, '0');
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+let toastTimer = 0;
+
+function toast(message, { error = false, undo = null } = {}) {
+  els.toastText.textContent = message;
+  els.toast.classList.toggle('is-error', error);
+  els.toast.classList.add('is-shown');
+  els.toastUndo.hidden = !undo;
+  state.undo = undo;
+  clearTimeout(toastTimer);
+  toastTimer = window.setTimeout(() => {
+    els.toast.classList.remove('is-shown');
+    state.undo = null;
+  }, 6000);
 }
 
-function shortId(id) {
-  return String(id).slice(0, 8);
+function showBanner(show, message = '') {
+  els.banner.hidden = !show;
+  if (show) els.bannerText.textContent = message || t('banner.offline');
 }
 
-/* ---------- gate ---------- */
+function errorText(error) {
+  return error?.status === 429 ? t('banner.rateLimit') : error?.message || t('banner.offline');
+}
+
+/* ---------- language ---------- */
+
+function updateLangToggle() {
+  els.langToggle.textContent = getLanguage() === 'zh' ? 'EN' : '中';
+}
+
+function switchLanguage() {
+  const next = otherLanguage();
+  setLanguage(next);
+  saveLanguage(next);
+  applyTranslations();
+  buildCaptureKinds();
+  buildImportance();
+  updateLangToggle();
+  if (state.selected) {
+    const fact = findFact(state.selected.id) ?? state.selected;
+    state.selected = fact;
+    fillInspector(ctx, fact);
+  }
+  renderAllViews();
+}
+
+/* ---------- session ---------- */
 
 function showGate(message = '') {
   els.app.hidden = true;
@@ -153,11 +251,16 @@ function showGate(message = '') {
 }
 
 function signOut(message = '') {
-  localStorage.removeItem(TOKEN_KEY);
+  try {
+    localStorage.removeItem(TOKEN_KEY);
+  } catch {
+    // Nothing to clean up.
+  }
   state.token = '';
   state.me = null;
-  state.facts = [];
-  state.cursor = null;
+  state.selected = null;
+  els.inspector.close();
+  for (const dialog of [els.searchDialog, els.devicesDialog]) if (dialog.open) dialog.close();
   els.token.value = '';
   showGate(message);
 }
@@ -166,22 +269,22 @@ async function onConnect(event) {
   event.preventDefault();
   const token = els.token.value.trim();
   if (!token) {
-    els.gateError.textContent = '先粘贴设备 token';
+    els.gateError.textContent = t('gate.errorEmpty');
     return;
   }
   els.gateError.textContent = '';
   try {
     const { response, data } = await request('/v1/me', { token });
     if (!response.ok) {
-      els.gateError.textContent = response.status === 401 ? 'token 无效或已被撤销' : `连接失败：HTTP ${response.status}`;
+      els.gateError.textContent = response.status === 401 ? t('gate.errorInvalid') : `HTTP ${response.status}`;
       return;
     }
     state.token = token;
     state.me = data.device;
     localStorage.setItem(TOKEN_KEY, token);
     enterApp();
-  } catch (error) {
-    els.gateError.textContent = error.message;
+  } catch {
+    els.gateError.textContent = t('gate.errorNetwork');
   }
 }
 
@@ -189,352 +292,554 @@ async function restoreSession(token) {
   try {
     const { response, data } = await request('/v1/me', { token });
     if (!response.ok) {
-      signOut(response.status === 401 ? 'token 已失效，请重新连接' : '');
+      signOut(response.status === 401 ? t('gate.errorInvalid') : '');
       return;
     }
     state.token = token;
     state.me = data.device;
     enterApp();
   } catch {
-    showGate('连不上服务端，检查网络或代理后重试');
+    showGate(t('gate.errorNetwork'));
   }
 }
 
 function enterApp() {
   els.gate.hidden = true;
   els.app.hidden = false;
-  els.deviceName.textContent = state.me.name;
-  els.deviceId.textContent = shortId(state.me.id);
-  refreshAll();
+  showBanner(false);
+  void bootApp();
+}
+
+/* ---------- routing ---------- */
+
+function readRoute() {
+  const raw = location.hash.replace(/^#\/?/, '');
+  const [pathPart = '', queryPart = ''] = raw.split('?');
+  const parts = pathPart.split('/').filter(Boolean);
+  const view = HASH_VIEW[parts[0]] ?? 'board';
+  const project = parts[1] ? decodeURIComponent(parts[1]) : null;
+  const id = new URLSearchParams(queryPart).get('id');
+  return { view, project, id };
+}
+
+function routeHash({ view, project, id }) {
+  const path = `/${VIEW_HASH[view] ?? 'b'}${project ? `/${encodeURIComponent(project)}` : ''}`;
+  return `#${path}${id ? `?id=${encodeURIComponent(id)}` : ''}`;
+}
+
+function writeRoute(next, { replace = false } = {}) {
+  const hash = routeHash(next);
+  if (location.hash === hash) return;
+  if (replace) history.replaceState(null, '', hash);
+  else location.hash = hash;
+}
+
+function setView(view) {
+  state.view = view;
+  for (const tab of els.viewTabs) {
+    const active = tab.dataset.view === view;
+    tab.classList.toggle('is-active', active);
+    tab.setAttribute('aria-selected', String(active));
+  }
+  for (const section of [els.viewBoard, els.viewTimeline, els.viewTriage, els.viewModel]) {
+    section.hidden = section.id !== `view-${view}`;
+  }
+}
+
+function applyRoute() {
+  const route = readRoute();
+  const projectChanged = Boolean(route.project) && route.project !== state.project;
+  if (route.project) state.project = route.project;
+  setView(route.view);
+  if (!state.project) {
+    renderAllViews();
+    return;
+  }
+  if (projectChanged) {
+    resetProjectState();
+    void loadProjectData();
+  } else {
+    ensureViewData(route.view);
+  }
+  if (route.id) {
+    if (!state.selected || state.selected.id !== route.id) void openInspector(route.id, { route: false });
+  } else if (state.selected) {
+    closeInspector({ route: false });
+  }
+  renderAllViews();
+}
+
+function ensureViewData(view) {
+  if (view === 'timeline' && !state.timeline) void loadTimeline();
+  if (view === 'triage' && !state.triage.loaded) void loadTriage();
+  if (view === 'model') renderModel(ctx);
+}
+
+async function bootApp() {
+  const loaded = await loadProjects();
+  if (!loaded) {
+    renderAllViews();
+    return;
+  }
+  const route = readRoute();
+  const target = route.project ?? state.projects[0]?.project ?? null;
+  if (!target) {
+    state.project = null;
+    renderAllViews();
+    return;
+  }
+  writeRoute({ view: route.view, project: target, id: route.id }, { replace: true });
+  applyRoute();
 }
 
 /* ---------- projects ---------- */
+
+async function loadProjects() {
+  try {
+    const data = await api('/v1/projects');
+    state.projects = data.projects ?? [];
+    renderProjects();
+    return true;
+  } catch {
+    showBanner(true);
+    return false;
+  }
+}
+
+function renderProjects() {
+  const filter = els.projectFilter.value.trim().toLowerCase();
+  const visible = filter
+    ? state.projects.filter((entry) => entry.project.toLowerCase().includes(filter))
+    : state.projects;
+  els.projectList.replaceChildren(
+    ...visible.map((entry) => {
+      const item = templates.project.content.firstElementChild.cloneNode(true);
+      const button = item.querySelector('.project');
+      button.classList.toggle('is-active', entry.project === state.project);
+      item.querySelector('.project-name').textContent = entry.project;
+      item.querySelector('.project-count').textContent = String(entry.facts);
+      button.addEventListener('click', () => selectProject(entry.project));
+      return item;
+    }),
+  );
+  els.projectsEmpty.hidden = state.projects.length > 0;
+  els.projectName.textContent = state.project ?? '—';
+  els.projectOptions.replaceChildren(
+    ...state.projects.map((entry) => {
+      const option = document.createElement('option');
+      option.value = entry.project;
+      return option;
+    }),
+  );
+}
+
+function selectProject(project) {
+  els.projectMenu.hidden = true;
+  els.projectButton.setAttribute('aria-expanded', 'false');
+  if (!project) return;
+  if (project === state.project) return;
+  writeRoute({ view: state.view, project, id: null });
+}
+
+/* ---------- loading ---------- */
+
+function resetProjectState() {
+  state.stats = null;
+  state.pinned = [];
+  state.timeline = null;
+  state.triage = { queue: [], index: 0, loaded: false };
+  state.selected = null;
+  state.loadingBoard = true;
+  if (els.inspector.open) els.inspector.close();
+  for (const kind of KINDS) state.lanes[kind] = { items: [], cursor: null, loading: false, error: null, seq: 0 };
+}
+
+async function loadStats(project = state.project) {
+  try {
+    const data = await api(`/v1/stats?project=${encodeURIComponent(project)}`);
+    if (state.project === project) state.stats = data;
+  } catch (error) {
+    if (state.project === project) showBanner(true, errorText(error));
+  }
+}
+
+async function loadPinned(project = state.project) {
+  const params = new URLSearchParams({ project, pinned: '1', sort: 'rank', limit: '8' });
+  try {
+    const data = await api(`/v1/facts?${params.toString()}`);
+    if (state.project === project) state.pinned = data.facts;
+  } catch {
+    if (state.project === project) state.pinned = [];
+  }
+}
+
+async function loadLane(kind, { reset = false, append = false } = {}) {
+  const lane = state.lanes[kind];
+  if (!lane || !state.project) return;
+  const project = state.project;
+  const seq = (lane.seq += 1);
+  if (reset) {
+    lane.items = [];
+    lane.cursor = null;
+  }
+  lane.loading = true;
+  lane.error = null;
+  renderBoard(ctx);
+  const params = new URLSearchParams({ project, kind, sort: 'recent', limit: '30' });
+  if (append && lane.cursor) params.set('cursor', lane.cursor);
+  try {
+    const data = await api(`/v1/facts?${params.toString()}`);
+    if (seq !== lane.seq || state.project !== project) return;
+    lane.items = append ? lane.items.concat(data.facts) : data.facts;
+    lane.cursor = data.next;
+  } catch (error) {
+    if (seq !== lane.seq) return;
+    lane.error = errorText(error);
+  } finally {
+    if (seq === lane.seq) {
+      lane.loading = false;
+      renderBoard(ctx);
+      renderChrome();
+    }
+  }
+}
+
+async function loadProjectData() {
+  const project = state.project;
+  state.loadingBoard = true;
+  showBanner(false);
+  await Promise.all([
+    loadStats(project),
+    loadPinned(project),
+    ...KINDS.map((kind) => loadLane(kind, { reset: true })),
+  ]);
+  if (state.project !== project) return;
+  state.loadingBoard = false;
+  renderAllViews();
+  if (state.view === 'timeline') void loadTimeline();
+  if (state.view === 'triage') void loadTriage();
+}
+
+async function loadTimeline() {
+  const project = state.project;
+  try {
+    const data = await api(`/v1/facts?project=${encodeURIComponent(project)}&sort=recent&limit=50`);
+    if (state.project !== project) return;
+    state.timeline = { items: data.facts, loaded: true };
+    renderTimeline(ctx);
+  } catch {
+    showBanner(true);
+  }
+}
+
+async function loadTriage() {
+  const project = state.project;
+  try {
+    const data = await api(`/v1/facts?project=${encodeURIComponent(project)}&sort=rank&limit=50`);
+    if (state.project !== project) return;
+    state.triage = { queue: data.facts, index: 0, loaded: true };
+    renderTriage(ctx);
+  } catch {
+    showBanner(true);
+  }
+}
+
+async function refreshProject() {
+  const project = state.project;
+  if (!project) return;
+  showBanner(false);
+  await Promise.all([
+    loadStats(project),
+    loadPinned(project),
+    ...KINDS.map((kind) => loadLane(kind, { reset: true })),
+  ]);
+  if (state.project !== project) return;
+  if (state.timeline) await loadTimeline();
+  if (state.view === 'triage') await loadTriage();
+  renderAllViews();
+}
+
+/* ---------- local fact updates ---------- */
+
+function findFact(id) {
+  const pools = [
+    state.pinned,
+    ...KINDS.map((kind) => state.lanes[kind].items),
+    state.timeline?.items ?? [],
+    state.triage.queue,
+  ];
+  for (const pool of pools) {
+    const hit = pool.find((fact) => fact.id === id);
+    if (hit) return hit;
+  }
+  return null;
+}
+
+function insertByCreatedAt(items, fact) {
+  const index = items.findIndex((item) => item.createdAt < fact.createdAt);
+  if (index === -1) items.push(fact);
+  else items.splice(index, 0, fact);
+}
+
+function applyFactUpdate(before, fact) {
+  const laneKinds = KINDS.filter((kind) => state.lanes[kind].items.some((item) => item.id === fact.id));
+  const wasPinned = state.pinned.some((item) => item.id === fact.id);
+  const wasInTimeline = Boolean(state.timeline?.items.some((item) => item.id === fact.id));
+
+  for (const kind of KINDS) state.lanes[kind].items = state.lanes[kind].items.filter((item) => item.id !== fact.id);
+  state.pinned = state.pinned.filter((item) => item.id !== fact.id);
+  if (state.timeline) state.timeline.items = state.timeline.items.filter((item) => item.id !== fact.id);
+  state.triage.queue = state.triage.queue.map((item) => (item.id === fact.id ? fact : item));
+
+  if (laneKinds.length > 0 && !fact.supersededBy) insertByCreatedAt(state.lanes[fact.kind].items, fact);
+  if (fact.pinned) {
+    state.pinned.push(fact);
+    state.pinned.sort((a, b) => Number(b.pinned) - Number(a.pinned) || (b.importance ?? 3) - (a.importance ?? 3) || b.createdAt - a.createdAt);
+  }
+  if (wasInTimeline && !fact.supersededBy) insertByCreatedAt(state.timeline.items, fact);
+
+  if (state.stats) {
+    if (before && before.kind !== fact.kind) {
+      state.stats.byKind[before.kind] = Math.max(0, state.stats.byKind[before.kind] - 1);
+      state.stats.byKind[fact.kind] += 1;
+    }
+    if (before && before.pinned !== fact.pinned) state.stats.pinned += fact.pinned ? 1 : -1;
+    if (before && !before.supersededBy && fact.supersededBy) state.stats.superseded += 1;
+    if (before && before.supersededBy && !fact.supersededBy) state.stats.superseded = Math.max(0, state.stats.superseded - 1);
+  }
+  if (wasPinned && !fact.pinned) {
+    // Already removed above; the stats line above kept the counter honest.
+  }
+}
+
+function removeLocally(fact) {
+  for (const kind of KINDS) state.lanes[kind].items = state.lanes[kind].items.filter((item) => item.id !== fact.id);
+  state.pinned = state.pinned.filter((item) => item.id !== fact.id);
+  if (state.timeline) state.timeline.items = state.timeline.items.filter((item) => item.id !== fact.id);
+  state.triage.queue = state.triage.queue.filter((item) => item.id !== fact.id);
+  if (state.stats) {
+    state.stats.facts = Math.max(0, state.stats.facts - 1);
+    state.stats.byKind[fact.kind] = Math.max(0, state.stats.byKind[fact.kind] - 1);
+    if (fact.pinned) state.stats.pinned = Math.max(0, state.stats.pinned - 1);
+    if (fact.supersededBy) state.stats.superseded = Math.max(0, state.stats.superseded - 1);
+  }
+  if (state.selected?.id === fact.id) closeInspector({ route: false });
+}
+
+/* ---------- inspector ---------- */
+
+function markSelected() {
+  for (const card of document.querySelectorAll('.card.is-selected')) card.classList.remove('is-selected');
+  if (!state.selected) return;
+  for (const card of document.querySelectorAll(`.card[data-id="${state.selected.id}"]`)) card.classList.add('is-selected');
+}
+
+async function openInspector(id, { route = true } = {}) {
+  let fact = findFact(id);
+  if (!fact) {
+    try {
+      fact = (await api(`/v1/facts/${encodeURIComponent(id)}`)).fact;
+    } catch {
+      return;
+    }
+  }
+  state.selected = fact;
+  fillInspector(ctx, fact);
+  if (!els.inspector.open) els.inspector.show();
+  if (route) writeRoute({ ...readRoute(), id: fact.id }, { replace: true });
+  markSelected();
+}
+
+function closeInspector({ route = true } = {}) {
+  state.selected = null;
+  if (els.inspector.open) els.inspector.close();
+  if (route) writeRoute({ ...readRoute(), id: null }, { replace: true });
+  markSelected();
+}
+
+async function patchFact(id, body) {
+  const before = findFact(id) ?? state.selected;
+  const data = await api(`/v1/facts/${encodeURIComponent(id)}`, { method: 'PATCH', body });
+  const fact = data.fact;
+  applyFactUpdate(before, fact);
+  if (state.selected?.id === fact.id) {
+    state.selected = fact;
+    fillInspector(ctx, fact);
+  }
+  if (before?.pinned !== fact.pinned) await loadPinned(fact.project);
+  renderAllViews();
+  return fact;
+}
+
+async function moveKind(id, kind) {
+  const fact = findFact(id) ?? state.selected;
+  if (!fact || !kind || fact.kind === kind) return;
+  try {
+    await patchFact(fact.id, { kind });
+    toast(t('toast.saved'));
+  } catch (error) {
+    toast(t('toast.failed', { message: error.message }), { error: true });
+  }
+}
+
+async function setImportance(fact, n) {
+  try {
+    await patchFact(fact.id, { importance: n });
+  } catch (error) {
+    toast(t('toast.failed', { message: error.message }), { error: true });
+  }
+}
+
+async function togglePin(fact) {
+  try {
+    await patchFact(fact.id, { pinned: !fact.pinned });
+  } catch (error) {
+    toast(t('toast.failed', { message: error.message }), { error: true });
+  }
+}
+
+async function removeFact(fact) {
+  try {
+    await api(`/v1/facts/${encodeURIComponent(fact.id)}`, { method: 'DELETE' });
+    removeLocally(fact);
+    renderAllViews();
+    toast(t('toast.deleted', { id: shortId(fact.id) }), { undo: () => restoreFact(fact) });
+  } catch (error) {
+    toast(t('toast.failed', { message: error.message }), { error: true });
+  }
+}
+
+async function restoreFact(fact) {
+  try {
+    await api('/v1/facts', {
+      method: 'POST',
+      body: {
+        project: fact.project,
+        kind: fact.kind,
+        text: fact.text,
+        tags: fact.tags,
+        harness: fact.harness,
+        importance: fact.importance,
+        pinned: fact.pinned,
+      },
+    });
+    toast(t('toast.restored', { id: shortId(fact.id) }));
+    await refreshProject();
+  } catch (error) {
+    toast(t('toast.failed', { message: error.message }), { error: true });
+  }
+}
+
+/* ---------- capture ---------- */
+
+function buildCaptureKinds() {
+  els.newKindGroup.replaceChildren(
+    ...KINDS.map((kind) => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.textContent = t(`kind.${kind}`);
+      button.setAttribute('aria-pressed', String(state.captureKind === kind));
+      button.addEventListener('click', () => {
+        state.captureKind = kind;
+        buildCaptureKinds();
+      });
+      return button;
+    }),
+  );
+}
+
+function startCapture(kind) {
+  if (kind) {
+    state.captureKind = kind;
+    buildCaptureKinds();
+  }
+  els.newText.focus();
+}
+
+function startSupersede(fact) {
+  state.supersedes = fact.id;
+  state.captureKind = fact.kind;
+  buildCaptureKinds();
+  els.captureTarget.hidden = false;
+  els.captureTargetText.textContent = t('capture.target', { id: shortId(fact.id) });
+  els.newText.value = fact.text;
+  closeInspector({ route: false });
+  els.newText.focus();
+}
+
+function clearSupersede() {
+  state.supersedes = null;
+  els.captureTarget.hidden = true;
+}
 
 function defaultProject() {
   return els.newProject.value.trim() || state.project || state.projects[0]?.project || '';
 }
 
-function syncProjectInput() {
-  if (state.project) {
-    els.newProject.value = state.project;
-  } else if (!els.newProject.value && state.projects.length > 0) {
-    els.newProject.value = state.projects[0].project;
-  }
-  els.newProject.placeholder = state.project || 'project';
-}
-
-function renderProjects() {
-  els.projectList.replaceChildren();
-  els.projectOptions.replaceChildren();
-  els.projectsEmpty.hidden = state.projects.length > 0;
-  const total = state.projects.reduce((sum, entry) => sum + entry.facts, 0);
-  els.totalCount.textContent = String(total);
-  els.allProjects.classList.toggle('is-active', state.project === null);
-
-  for (const entry of state.projects) {
-    const node = els.projectTemplate.content.firstElementChild.cloneNode(true);
-    const button = $('.project', node);
-    button.dataset.project = entry.project;
-    button.classList.toggle('is-active', state.project === entry.project);
-    $('.project-name', node).textContent = entry.project;
-    $('.project-count', node).textContent = String(entry.facts);
-    button.addEventListener('click', () => selectProject(entry.project));
-    els.projectList.append(node);
-
-    const option = document.createElement('option');
-    option.value = entry.project;
-    els.projectOptions.append(option);
-  }
-  syncProjectInput();
-}
-
-function selectProject(project) {
-  state.project = project;
-  renderProjects();
-  loadFacts({ reset: true });
-}
-
-async function loadProjects() {
-  try {
-    const data = await api('/v1/projects');
-    state.projects = data.projects;
-    renderProjects();
-  } catch (error) {
-    toast(error.message, true);
-  }
-}
-
-/* ---------- facts ---------- */
-
-function currentFilters() {
-  const params = new URLSearchParams({ limit: String(PAGE_SIZE) });
-  if (state.project) params.set('project', state.project);
-  else params.set('all', '1');
-  if (state.kind) params.set('kind', state.kind);
-  if (state.tag) params.set('tag', state.tag);
-  if (state.q) params.set('q', state.q);
-  return params;
-}
-
-function renderEmpty() {
-  const box = document.createElement('div');
-  box.className = 'empty';
-  const title = document.createElement('strong');
-  const filtered = state.q || state.kind || state.tag;
-  title.textContent = filtered ? '这层土还没翻到' : '这里还是空地';
-  const hint = document.createElement('p');
-  hint.textContent = filtered
-    ? '换个词，或清掉左侧的筛选。'
-    : '用上方输入框记录第一条决策、坑或约定。';
-  box.append(title, hint);
-  return box;
-}
-
-function buildFact(fact) {
-  const node = els.factTemplate.content.firstElementChild.cloneNode(true);
-  node.dataset.id = fact.id;
-  node.dataset.kind = fact.kind;
-  $('.kind-label', node).textContent = KIND_LABEL[fact.kind] ?? fact.kind;
-  $('.kind-dot', node).classList.add(fact.kind);
-  const text = $('.fact-text', node);
-  text.textContent = fact.text;
-  if (Array.from(fact.text).length > 260) {
-    text.classList.add('is-clamped');
-    const expand = document.createElement('button');
-    expand.type = 'button';
-    expand.className = 'fact-expand';
-    expand.textContent = '展开全文';
-    expand.addEventListener('click', () => {
-      const clamped = text.classList.toggle('is-clamped');
-      expand.textContent = clamped ? '展开全文' : '收起';
-    });
-    text.after(expand);
-  }
-  const tags = $('.fact-tags', node);
-  for (const tag of fact.tags || []) {
-    const item = document.createElement('li');
-    item.textContent = `#${tag}`;
-    tags.append(item);
-  }
-  if (!(fact.tags || []).length) tags.remove();
-  $('.meta-harness', node).textContent = fact.harness || 'unknown';
-  $('.meta-device', node).textContent = fact.deviceName || 'unknown';
-  $('.meta-time', node).textContent = formatTime(fact.createdAt);
-  $('.meta-id', node).textContent = shortId(fact.id);
-
-  node.querySelector('[data-action="edit"]').addEventListener('click', () => openEdit(fact));
-  node.querySelector('[data-action="copy"]').addEventListener('click', async () => {
-    try {
-      await navigator.clipboard.writeText(fact.id);
-      toast(`已复制 ${shortId(fact.id)}`);
-    } catch {
-      toast('浏览器不允许写剪贴板', true);
-    }
-  });
-  node.querySelector('[data-action="delete"]').addEventListener('click', (event) => onDelete(event.currentTarget, fact));
-  return node;
-}
-
-async function onDelete(button, fact) {
-  if (button.dataset.confirm !== 'true') {
-    button.dataset.confirm = 'true';
-    button.textContent = '确认删除';
-    window.setTimeout(() => {
-      button.dataset.confirm = 'false';
-      button.textContent = '删除';
-    }, 4000);
-    return;
-  }
-  try {
-    await api(`/v1/facts/${encodeURIComponent(fact.id)}`, { method: 'DELETE' });
-    state.facts = state.facts.filter((entry) => entry.id !== fact.id);
-    renderList();
-    loadProjects();
-    toast(`已删除 ${shortId(fact.id)}`);
-  } catch (error) {
-    toast(error.message, true);
-  }
-}
-
-function renderList() {
-  els.list.replaceChildren();
-  if (state.facts.length === 0) {
-    els.list.append(renderEmpty());
-  } else {
-    const fragment = document.createDocumentFragment();
-    for (const fact of state.facts) fragment.append(buildFact(fact));
-    els.list.append(fragment);
-  }
-  els.more.hidden = !state.cursor;
-  els.listFoot.textContent = state.facts.length
-    ? `${state.facts.length} 条已加载${state.cursor ? ' · 还有更多' : ''}`
-    : '';
-}
-
-async function loadFacts({ reset = false, append = false } = {}) {
-  const seq = ++loadSeq;
-  if (reset) {
-    state.facts = [];
-    state.cursor = null;
-    renderList();
-  }
-  const params = currentFilters();
-  if (append && state.cursor) params.set('cursor', state.cursor);
-  try {
-    const data = await api(`/v1/facts?${params.toString()}`);
-    if (seq !== loadSeq) return;
-    state.facts = append ? state.facts.concat(data.facts) : data.facts;
-    state.cursor = data.next;
-    renderList();
-  } catch (error) {
-    if (seq === loadSeq) toast(error.message, true);
-  }
-}
-
-async function addFact() {
+async function addFact(event) {
+  event.preventDefault();
   const text = els.newText.value.trim();
   if (!text) {
-    toast('写点什么再记录', true);
+    toast(t('capture.textRequired'), { error: true });
     els.newText.focus();
     return;
   }
   const project = defaultProject();
   if (!project) {
-    toast('先填 project 名称', true);
+    toast(t('capture.projectRequired'), { error: true });
     els.newProject.focus();
     return;
   }
   const body = {
     project,
-    kind: els.newKind.value,
+    kind: state.captureKind,
     text,
     tags: splitTags(els.newTags.value),
     harness: 'web',
+    importance: 3,
   };
+  if (state.supersedes) body.supersedes = state.supersedes;
   els.add.disabled = true;
   try {
     const data = await api('/v1/facts', { method: 'POST', body });
     els.newText.value = '';
     els.newTags.value = '';
-    els.newProject.value = project;
-    if (!state.project) state.project = project;
-    toast(data.deduped ? `已存在 ${shortId(data.fact.id)}` : `已记录 ${shortId(data.fact.id)}`);
-    await Promise.all([loadProjects(), loadFacts({ reset: true })]);
+    els.newProject.value = '';
+    clearSupersede();
+    toast(
+      data.deduped
+        ? t('capture.duplicate', { id: shortId(data.fact.id) })
+        : t('capture.saved', { id: shortId(data.fact.id) }),
+    );
+    if (project !== state.project) {
+      await loadProjects();
+      writeRoute({ view: state.view, project, id: null });
+    } else if (data.supersededTarget) {
+      // A retired fact can live in another lane; reload the whole project.
+      await loadProjects();
+      await refreshProject();
+    } else {
+      await Promise.all([loadStats(), loadLane(data.fact.kind, { reset: true })]);
+      if (data.fact.pinned) await loadPinned();
+      renderAllViews();
+    }
   } catch (error) {
-    toast(error.message, true);
+    toast(t('toast.failed', { message: error.message }), { error: true });
   } finally {
     els.add.disabled = false;
   }
 }
 
-/* ---------- edit ---------- */
-
-function openEdit(fact) {
-  editingId = fact.id;
-  els.editText.value = fact.text;
-  els.editKind.value = fact.kind;
-  els.editTags.value = (fact.tags || []).join(', ');
-  els.editDialog.showModal();
-  els.editText.focus();
-}
-
-async function saveEdit(event) {
-  event.preventDefault();
-  if (!editingId) return;
-  const body = {
-    text: els.editText.value.trim(),
-    kind: els.editKind.value,
-    tags: splitTags(els.editTags.value),
-  };
-  els.editSave.disabled = true;
-  try {
-    await api(`/v1/facts/${encodeURIComponent(editingId)}`, { method: 'PATCH', body });
-    els.editDialog.close();
-    editingId = null;
-    toast('已保存修订');
-    await Promise.all([loadProjects(), loadFacts({ reset: true })]);
-  } catch (error) {
-    toast(error.message, true);
-  } finally {
-    els.editSave.disabled = false;
-  }
-}
-
-/* ---------- devices ---------- */
-
-async function loadDevices() {
-  els.devicesError.textContent = '';
-  els.deviceRows.replaceChildren();
-  try {
-    const data = await api('/v1/devices');
-    for (const device of data.devices) {
-      const row = els.deviceTemplate.content.firstElementChild.cloneNode(true);
-      $('.device-id', row).textContent = shortId(device.id);
-      $('.device-name', row).textContent = device.name;
-      $('.device-scopes', row).textContent = (device.scopes || []).join(',');
-      const seen = device.lastSeenAt ? formatTime(device.lastSeenAt) : '从未';
-      const seenCell = $('.device-seen', row);
-      seenCell.textContent = device.revokedAt ? '已撤销' : seen;
-      if (device.revokedAt) seenCell.classList.add('is-revoked');
-      const button = row.querySelector('[data-action="revoke"]');
-      if (device.revokedAt) {
-        button.hidden = true;
-      } else {
-        button.addEventListener('click', (event) => revokeDevice(event.currentTarget, device));
-      }
-      els.deviceRows.append(row);
-    }
-    if (data.devices.length === 0) {
-      const row = document.createElement('tr');
-      const cell = document.createElement('td');
-      cell.colSpan = 5;
-      cell.textContent = '没有设备记录';
-      row.append(cell);
-      els.deviceRows.append(row);
-    }
-  } catch (error) {
-    els.devicesError.textContent = error.message;
-  }
-}
-
-async function revokeDevice(button, device) {
-  if (button.dataset.confirm !== 'true') {
-    button.dataset.confirm = 'true';
-    button.textContent = '确认撤销';
-    window.setTimeout(() => {
-      button.dataset.confirm = 'false';
-      button.textContent = '撤销';
-    }, 4000);
-    return;
-  }
-  try {
-    await api(`/v1/devices/${encodeURIComponent(device.id)}/revoke`, { method: 'POST' });
-    if (device.id === state.me.id) {
-      els.devicesDialog.close();
-      signOut('当前设备已被撤销，请重新登录');
-      return;
-    }
-    toast(`已撤销 ${device.name}`);
-    await loadDevices();
-  } catch (error) {
-    els.devicesError.textContent = error.message;
-  }
-}
-
-/* ---------- export ---------- */
+/* ---------- devices / export ---------- */
 
 async function exportNdjson() {
+  if (!state.project) return;
   els.exportBtn.disabled = true;
   try {
     const lines = [];
     let cursor = null;
     do {
-      const params = new URLSearchParams({ limit: '200' });
-      if (state.project) params.set('project', state.project);
-      else params.set('all', '1');
-      if (state.kind) params.set('kind', state.kind);
-      if (state.tag) params.set('tag', state.tag);
-      if (state.q) params.set('q', state.q);
+      const params = new URLSearchParams({ project: state.project, limit: '200' });
       if (cursor) params.set('cursor', cursor);
       const data = await api(`/v1/export?${params.toString()}`);
       for (const fact of data.facts) {
@@ -545,6 +850,8 @@ async function exportNdjson() {
             text: fact.text,
             tags: fact.tags,
             harness: fact.harness,
+            pinned: fact.pinned,
+            importance: fact.importance,
             created_at: fact.createdAt,
           }),
         );
@@ -555,87 +862,226 @@ async function exportNdjson() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `loam-${state.project || 'all'}-${new Date().toISOString().slice(0, 10)}.ndjson`;
+    link.download = `loam-${state.project}-${new Date().toISOString().slice(0, 10)}.ndjson`;
     document.body.append(link);
     link.click();
     link.remove();
     URL.revokeObjectURL(url);
-    toast(`已导出 ${lines.length} 条`);
+    toast(t('export.done', { n: lines.length }));
   } catch (error) {
-    toast(error.message, true);
+    toast(t('export.failed', { message: error.message }), { error: true });
   } finally {
     els.exportBtn.disabled = false;
   }
 }
 
-/* ---------- wiring ---------- */
+/* ---------- render ---------- */
 
-async function refreshAll() {
-  await loadProjects();
-  await loadFacts({ reset: true });
+function renderChrome() {
+  els.projectName.textContent = state.project ?? '—';
+  els.newProject.placeholder = state.project ?? t('capture.project');
+  els.projectButton.setAttribute('aria-expanded', String(!els.projectMenu.hidden));
+  renderProjects();
+}
+
+function renderAllViews() {
+  renderBoard(ctx);
+  renderPinned(ctx);
+  renderTimeline(ctx);
+  renderTriage(ctx);
+  if (state.view === 'model') renderModel(ctx);
+  renderChrome();
+  markSelected();
+}
+
+/* ---------- bindings ---------- */
+
+function buildImportance() {
+  els.importance.replaceChildren(
+    ...[1, 2, 3, 4, 5].map((n) => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.dataset.n = String(n);
+      button.textContent = String(n);
+      button.setAttribute('aria-label', t('inspector.importance', { n }));
+      button.addEventListener('click', () => {
+        if (state.selected) void setImportance(state.selected, n);
+      });
+      return button;
+    }),
+  );
 }
 
 function bind() {
   els.gateForm.addEventListener('submit', onConnect);
-  els.add.addEventListener('click', addFact);
-  els.refresh.addEventListener('click', refreshAll);
-  els.more.addEventListener('click', () => loadFacts({ append: true }));
-  els.exportBtn.addEventListener('click', exportNdjson);
-  els.devicesBtn.addEventListener('click', () => {
-    els.devicesDialog.showModal();
-    loadDevices();
+
+  els.viewTabs.forEach((tab) => {
+    tab.addEventListener('click', () => writeRoute({ ...readRoute(), view: tab.dataset.view, id: null }));
   });
-  els.devicesClose.addEventListener('click', () => els.devicesDialog.close());
+
+  els.projectButton.addEventListener('click', () => {
+    els.projectMenu.hidden = !els.projectMenu.hidden;
+    els.projectButton.setAttribute('aria-expanded', String(!els.projectMenu.hidden));
+    if (!els.projectMenu.hidden) els.projectFilter.focus();
+  });
+  els.projectFilter.addEventListener('input', renderProjects);
+  document.addEventListener('click', (event) => {
+    if (els.projectMenu.hidden) return;
+    if (event.target.closest('.project-switch')) return;
+    els.projectMenu.hidden = true;
+    els.projectButton.setAttribute('aria-expanded', 'false');
+  });
+
+  els.searchOpen.addEventListener('click', () => openSearch(ctx));
+  els.langToggle.addEventListener('click', switchLanguage);
+  els.devicesOpen.addEventListener('click', () => openDevices(ctx));
+  els.exportBtn.addEventListener('click', () => void exportNdjson());
   els.logout.addEventListener('click', () => signOut());
-  els.allProjects.addEventListener('click', () => selectProject(null));
-  els.editForm.addEventListener('submit', saveEdit);
+  els.devicesClose.addEventListener('click', () => els.devicesDialog.close());
+  els.bannerRetry.addEventListener('click', () => {
+    showBanner(false);
+    void refreshProject();
+    void loadProjects();
+  });
+
+  els.capture.addEventListener('submit', addFact);
+  els.newText.addEventListener('input', () => {
+    els.newText.style.height = 'auto';
+    els.newText.style.height = `${Math.min(els.newText.scrollHeight, 120)}px`;
+  });
+  els.captureClear.addEventListener('click', clearSupersede);
+
+  els.triagePrev.addEventListener('click', () => {
+    state.triage.index = Math.max(0, state.triage.index - 1);
+    renderTriage(ctx);
+  });
+  els.triageNext.addEventListener('click', () => {
+    state.triage.index = Math.min(state.triage.queue.length, state.triage.index + 1);
+    renderTriage(ctx);
+  });
+  els.triageSkip.addEventListener('click', () => {
+    state.triage.index = Math.min(state.triage.queue.length, state.triage.index + 1);
+    renderTriage(ctx);
+  });
+  els.triagePin.addEventListener('click', () => {
+    const fact = state.triage.queue[state.triage.index];
+    if (fact) void togglePin(fact);
+  });
+  els.triageEdit.addEventListener('click', () => {
+    const fact = state.triage.queue[state.triage.index];
+    if (fact) void openInspector(fact.id);
+  });
+  els.triageDelete.addEventListener('click', () => {
+    const fact = state.triage.queue[state.triage.index];
+    if (fact) void removeFact(fact);
+  });
+
+  els.inspectorClose.addEventListener('click', () => closeInspector());
+  els.pinToggle.addEventListener('click', () => {
+    if (state.selected) void togglePin(state.selected);
+  });
+  els.supersede.addEventListener('click', () => {
+    if (state.selected) startSupersede(state.selected);
+  });
+  els.delete.addEventListener('click', () => {
+    if (state.selected) void removeFact(state.selected);
+  });
+  els.copyId.addEventListener('click', async () => {
+    if (!state.selected) return;
+    try {
+      await navigator.clipboard.writeText(state.selected.id);
+      toast(t('inspector.copied', { id: shortId(state.selected.id) }));
+    } catch {
+      toast(t('toast.failed', { message: 'clipboard' }), { error: true });
+    }
+  });
+  els.inspectorRelease.addEventListener('click', async () => {
+    if (!state.selected) return;
+    try {
+      await patchFact(state.selected.id, { supersededBy: null });
+      toast(t('inspector.released'));
+    } catch (error) {
+      toast(t('toast.failed', { message: error.message }), { error: true });
+    }
+  });
+  els.editOpen.addEventListener('click', () => {
+    if (!state.selected) return;
+    els.editText.value = state.selected.text;
+    els.editTags.value = (state.selected.tags || []).join(', ');
+    els.editPanel.hidden = false;
+    els.editText.focus();
+  });
   els.editCancel.addEventListener('click', () => {
-    editingId = null;
-    els.editDialog.close();
+    els.editPanel.hidden = true;
   });
-
-  els.q.addEventListener(
-    'input',
-    debounce(() => {
-      state.q = els.q.value.trim();
-      loadFacts({ reset: true });
-    }, 260),
-  );
-  els.tag.addEventListener(
-    'input',
-    debounce(() => {
-      state.tag = els.tag.value.trim().toLowerCase();
-      loadFacts({ reset: true });
-    }, 260),
-  );
-  els.kinds.addEventListener('click', (event) => {
-    const button = event.target.closest('[data-kind]');
-    if (!button) return;
-    state.kind = button.dataset.kind || '';
-    for (const chip of els.kinds.querySelectorAll('[data-kind]')) {
-      chip.classList.toggle('is-active', chip === button);
-    }
-    loadFacts({ reset: true });
-  });
-
-  els.newText.addEventListener('keydown', (event) => {
-    if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') addFact();
-  });
-
-  document.addEventListener('keydown', (event) => {
-    const tag = document.activeElement?.tagName;
-    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
-    if (event.key === '/' && document.activeElement !== els.q) {
-      event.preventDefault();
-      els.q.focus();
+  els.editSave.addEventListener('click', async () => {
+    if (!state.selected) return;
+    const text = els.editText.value.trim();
+    if (!text) return;
+    els.editSave.disabled = true;
+    try {
+      await patchFact(state.selected.id, { text, tags: splitTags(els.editTags.value) });
+      els.editPanel.hidden = true;
+      toast(t('toast.saved'));
+    } catch (error) {
+      toast(t('toast.failed', { message: error.message }), { error: true });
+    } finally {
+      els.editSave.disabled = false;
     }
   });
+
+  els.toastUndo.addEventListener('click', () => {
+    const action = state.undo;
+    state.undo = null;
+    els.toast.classList.remove('is-shown');
+    if (action) void action();
+  });
+
+  els.searchDialog.addEventListener('click', (event) => {
+    if (event.target === els.searchDialog) els.searchDialog.close();
+  });
+  els.devicesDialog.addEventListener('click', (event) => {
+    if (event.target === els.devicesDialog) els.devicesDialog.close();
+  });
+
+  window.addEventListener('hashchange', applyRoute);
 }
 
-async function init() {
+const ctx = {
+  els,
+  state,
+  templates,
+  t,
+  formatAge,
+  formatDate,
+  api,
+  toast,
+  openInspector,
+  loadMore: (kind) => void loadLane(kind, { append: true }),
+  reloadLane: (kind) => void loadLane(kind, { reset: true }),
+  moveKind,
+  startCapture,
+  signOut,
+};
+
+/* ---------- boot ---------- */
+
+function init() {
+  loadLanguage();
+  applyTranslations();
+  updateLangToggle();
+  buildCaptureKinds();
+  buildImportance();
   bind();
-  const saved = localStorage.getItem(TOKEN_KEY);
-  if (saved) await restoreSession(saved);
+  bindSearch(ctx);
+  els.newProject.value = '';
+  let saved = null;
+  try {
+    saved = localStorage.getItem(TOKEN_KEY);
+  } catch {
+    saved = null;
+  }
+  if (saved) void restoreSession(saved);
   else showGate();
 }
 

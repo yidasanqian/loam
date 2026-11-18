@@ -12,6 +12,7 @@
     "test": "pnpm -r test",
     "typecheck": "pnpm -r typecheck",
     "check:licenses": "node scripts/check-licenses.mjs",
-    "check": "pnpm typecheck && pnpm test && pnpm check:licenses"
+    "check:i18n": "node scripts/check-i18n.mjs",
+    "check": "pnpm typecheck && pnpm test && pnpm check:licenses && pnpm check:i18n"
   }
 }

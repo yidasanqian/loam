@@ -2,6 +2,27 @@
 
 All notable changes to this project are documented here. Format: [Keep a Changelog](https://keepachangelog.com/), SemVer.
 
+## [Unreleased]
+
+### Added
+
+- 记忆工作台（`worker/public/` 重写）：四泳道工作台、检视抽屉、底部捕获、搜索面板、时间轴、复盘、记忆模型原理图；整页不滚动，窄屏横向 snap。
+- 界面中英双语：`localStorage` → `navigator.languages`（RFC 4647 主语言匹配）→ `en` 协商；切换持久化，`<html lang>` 与 `Intl` 日期同步。
+- 记忆形状（ADR-0006）：`pinned`、`importance(1..5)`、`superseded_by/at`；`sort=rank` 排序（常驻 > 重要度 > 时间）；默认召回过滤被取代条目。
+- `GET /v1/stats` 增加 `byKind` / `pinned` / `superseded`；`POST /v1/facts` 支持 `supersedes`；`PATCH /v1/facts/:id` 支持 `pinned` / `importance` / 取消取代。
+- CLI：`add --pin --importance --supersedes`、`search --sort rank|recent`（默认 rank）、`show` 显示常驻/重要度/取代；`inject` 按 rank 注入。
+- 迁移 `worker/migrations/0002-memory-shape.sql`；[docs/UI.md](docs/UI.md)；本地样例脚本 `scripts/seed-dev.mjs`。
+
+### Changed
+
+- `search` 默认排序改为 `rank`；`--sort recent` 保持旧行为。
+- `prune` 跳过常驻条目；删除被取代目标时清空指向它的 `superseded_by`。
+- NDJSON 导出与导入包含 `pinned` / `importance`。
+
+### Notes
+
+- 仍未做：MCP、服务端 LLM 抽取、向量检索、多用户 RBAC、快捷键映射、界面以外内容的翻译。
+
 ## [0.1.1] - 2026-11-18
 
 ### Changed

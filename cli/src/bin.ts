@@ -78,7 +78,16 @@ async function run(task: () => Promise<void>): Promise<void> {
   }
 }
 
-function queueFact(input: { project: string; kind: string; text: string; tags: string[]; harness: string }): void {
+function queueFact(input: {
+  project: string;
+  kind: string;
+  text: string;
+  tags: string[];
+  harness: string;
+  pinned?: boolean;
+  importance?: number;
+  supersedes?: string;
+}): void {
   const queued = appendOutbox({ ...input, queuedAt: Date.now() });
   console.log(pc.yellow(`~ 已写入 outbox（${queued} 条待 loam flush）`));
 }
@@ -148,19 +157,29 @@ program
   .option('-p, --project <project>')
   .option('-t, --tags <tags>', '逗号分隔，最多 8 个')
   .option('--harness <harness>', '来源 harness', detectHarness())
+  .option('--pin', '标记为常驻（注入与复盘优先，最多 8 条/project）')
+  .option('--importance <n>', '重要度 1..5，默认 3')
+  .option('--supersedes <id>', '这条新事实取代的旧事实 id（8 位前缀即可）')
   .option('--stdin', '从 stdin 读取文本')
   .option('--offline', '直接写入本地 outbox')
   .option('--json')
-  .action((textArgs: string[], options: { kind: string; project?: string; tags?: string; harness: string; stdin?: boolean; offline?: boolean; json?: boolean }) =>
+  .action((textArgs: string[], options: { kind: string; project?: string; tags?: string; harness: string; pin?: boolean; importance?: string; supersedes?: string; stdin?: boolean; offline?: boolean; json?: boolean }) =>
     run(async () => {
       const raw = options.stdin ? await readStdin() : (textArgs ?? []).join(' ');
       if (!raw.trim()) throw new CliError('empty_text', '文本为空：loam add "…" 或 --stdin', 2);
+      const importance = options.importance === undefined ? 3 : Number(options.importance);
+      if (!Number.isInteger(importance) || importance < 1 || importance > 5) {
+        throw new CliError('bad_importance', '--importance 取值 1..5', 2);
+      }
       const input = {
         project: sanitizeProject(options.project ?? detectProject()),
         kind: options.kind,
         text: raw.trim(),
         tags: parseTags(options.tags),
         harness: options.harness,
+        pinned: Boolean(options.pin),
+        importance,
+        ...(options.supersedes ? { supersedes: options.supersedes } : {}),
       };
       if (input.tags.length > 8) throw new CliError('too_many_tags', '最多 8 个标签', 2);
       const config = requireConfig();
@@ -181,6 +200,7 @@ program
         return;
       }
       console.log(response.deduped ? pc.dim(`= 已存在 ${shortId(response.fact.id)} (${input.project})`) : `${pc.green('+')} ${shortId(response.fact.id)} [${input.kind}] ${input.project}`);
+      if (response.supersededTarget) console.log(pc.dim(`  已取代 ${shortId(response.supersededTarget.id)}`));
       if (response.warning) console.error(pc.yellow(`! ${response.warning}`));
     }),
   );
@@ -193,18 +213,22 @@ program
   .option('-k, --kind <kind>')
   .option('-t, --tag <tag>')
   .option('-l, --limit <n>', '1..5', '5')
+  .option('--sort <mode>', 'rank（常驻 > 重要度 > 时间）或 recent', 'rank')
   .option('--json')
   .option('--no-cache', '离线时不要读缓存')
-  .action((queryArgs: string[], options: { project?: string; all?: boolean; kind?: string; tag?: string; limit: string; json?: boolean; cache?: boolean }) =>
+  .action((queryArgs: string[], options: { project?: string; all?: boolean; kind?: string; tag?: string; limit: string; sort: string; json?: boolean; cache?: boolean }) =>
     run(async () => {
       const config = requireConfig();
       const limit = Number(options.limit);
       if (!Number.isInteger(limit) || limit < 1 || limit > 5) {
         throw new CliError('bad_limit', 'search --limit 取值 1..5；更多结果请用 loam list', 2);
       }
+      if (options.sort !== 'rank' && options.sort !== 'recent') {
+        throw new CliError('bad_sort', 'search --sort 取值 rank 或 recent', 2);
+      }
       const project = options.all ? null : sanitizeProject(options.project ?? detectProject());
       const query = (queryArgs ?? []).join(' ').trim();
-      const params = new URLSearchParams({ limit: String(limit) });
+      const params = new URLSearchParams({ limit: String(limit), sort: options.sort });
       if (options.all) params.set('all', '1');
       else if (project) params.set('project', project);
       if (query) params.set('q', query);
@@ -358,6 +382,8 @@ program
               text: fact.text,
               tags: fact.tags,
               harness: fact.harness,
+              pinned: fact.pinned ?? false,
+              importance: fact.importance ?? 3,
               created_at: fact.createdAt,
             }),
           );
@@ -435,6 +461,9 @@ program
           text: entry.text,
           tags: entry.tags,
           harness: entry.harness,
+          pinned: entry.pinned ?? false,
+          importance: entry.importance ?? 3,
+          ...(entry.supersedes ? { supersedes: entry.supersedes } : {}),
         });
       });
       if (!options.quiet) {
@@ -549,7 +578,7 @@ program
       const max = Number.isFinite(raw) ? Math.min(Math.max(Math.trunc(raw), 1), 3) : 3;
       const project = sanitizeProject(options.project ?? detectProject());
       try {
-        const page = await new Client(config).request<SearchResponse>('GET', `/v1/facts?project=${encodeURIComponent(project)}&limit=${max}`);
+        const page = await new Client(config).request<SearchResponse>('GET', `/v1/facts?project=${encodeURIComponent(project)}&sort=rank&limit=${max}`);
         if (page.facts.length === 0) return;
         const lines = ['<loam>'];
         for (const fact of page.facts) lines.push(`- [${fact.kind}] ${oneLine(fact.text, 60)}`);

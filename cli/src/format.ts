@@ -3,8 +3,9 @@ import { todayIso } from './util.ts';
 
 export const MAX_LINE = 100;
 export const MAX_SEARCH_LINES = 6;
+export const DEFAULT_IMPORTANCE = 3;
 
-export type FactLine = Pick<Fact, 'id' | 'kind' | 'text' | 'harness' | 'createdAt'>;
+export type FactLine = Pick<Fact, 'id' | 'kind' | 'text' | 'harness' | 'createdAt' | 'pinned' | 'importance'>;
 
 export function shortId(id: string): string {
   return id.slice(0, 8);
@@ -19,8 +20,10 @@ export function oneLine(text: string, max: number): string {
 }
 
 export function formatFactLine(fact: FactLine, maxLine = MAX_LINE): string {
-  const prefix = `- [${fact.kind}] `;
-  const suffix = ` (${fact.harness || 'unknown'} · ${todayIso(fact.createdAt)} · ${shortId(fact.id)})`;
+  const pinned = fact.pinned ? '★ ' : '';
+  const prefix = `- [${fact.kind}] ${pinned}`;
+  const importance = fact.importance && fact.importance !== DEFAULT_IMPORTANCE ? ` · ${fact.importance}/5` : '';
+  const suffix = ` (${fact.harness || 'unknown'} · ${todayIso(fact.createdAt)} · ${shortId(fact.id)}${importance})`;
   const budget = Math.max(12, maxLine - Array.from(prefix).length - Array.from(suffix).length);
   const line = `${prefix}${oneLine(fact.text, budget)}${suffix}`;
   return Array.from(line).length <= maxLine ? line : oneLine(line, maxLine).replace(/…$/u, '') + '…';
@@ -41,8 +44,12 @@ export function formatFacts(facts: FactLine[], options: FormatFactsOptions = {})
 }
 
 export function formatDetail(fact: Fact): string {
+  const marks = [];
+  if (fact.pinned) marks.push('pinned');
+  if (fact.importance !== undefined && fact.importance !== DEFAULT_IMPORTANCE) marks.push(`importance ${fact.importance}/5`);
+  if (fact.supersededBy) marks.push(`superseded by ${shortId(fact.supersededBy)}`);
   const lines = [
-    `${shortId(fact.id)}  [${fact.kind}]  ${fact.project}`,
+    `${shortId(fact.id)}  [${fact.kind}]  ${fact.project}${marks.length ? `  (${marks.join(', ')})` : ''}`,
     fact.text,
     fact.tags.length ? `tags: ${fact.tags.join(', ')}` : '',
     `from ${fact.harness} on ${fact.deviceName || 'unknown device'} at ${new Date(fact.createdAt).toISOString()}`,

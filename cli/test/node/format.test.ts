@@ -44,6 +44,21 @@ test('formatFacts reports an empty result', () => {
   assert.deepEqual(formatFacts([]), ['无命中。']);
 });
 
+test('pinned and importance marks stay inside the line budget', () => {
+  const line = formatFactLine(fact({ pinned: true, importance: 5 }));
+  assert.ok(line.includes('★'));
+  assert.ok(line.includes('5/5'));
+  assert.ok(Array.from(line).length <= 100);
+
+  const defaultLine = formatFactLine(fact({ importance: 3 }));
+  assert.ok(!defaultLine.includes('3/5'));
+
+  const detail = formatDetail(fact({ pinned: true, importance: 5, supersededBy: 'abcdef12-0000-0000-0000-000000000000' }));
+  assert.ok(detail.includes('pinned'));
+  assert.ok(detail.includes('importance 5/5'));
+  assert.ok(detail.includes('superseded by abcdef12'));
+});
+
 test('formatDetail exposes provenance and tags', () => {
   const detail = formatDetail(fact());
   assert.ok(detail.includes(base.text));

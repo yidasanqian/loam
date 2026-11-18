@@ -4,7 +4,17 @@ import { authenticate, constantTimeEqual, parseBearer, sha256Hex, touchDevice } 
 import type { Db } from './db.ts';
 import { activateDevice, listDevices, revokeDevice, rotateToken } from './devices.ts';
 import { ApiFailure } from './errors.ts';
-import { countProject, createFact, deleteFact, getFact, importFacts, listProjects, pruneFacts, searchFacts, updateFact } from './facts.ts';
+import {
+  createFact,
+  deleteFact,
+  getFact,
+  importFacts,
+  listProjects,
+  projectStats,
+  pruneFacts,
+  searchFacts,
+  updateFact,
+} from './facts.ts';
 import {
   EXPORT_LIMIT,
   RATE_API_PER_MIN,
@@ -16,6 +26,7 @@ import {
 import { allow, type RateLimiter } from './rate.ts';
 import {
   asObject,
+  asString,
   parseDurationDays,
   parseSearchParams,
   validateDeviceName,
@@ -123,8 +134,10 @@ app.post('/v1/devices/:id/rotate', async (c) => {
 app.post('/v1/facts', async (c) => {
   const device = c.get('device');
   requireScope(device, 'write');
-  const input = validateFactInput(await readJson(c));
-  const result = await createFact(c.env.DB, device, input, Date.now());
+  const body = asObject(await readJson(c));
+  const input = validateFactInput(body);
+  const supersedes = body.supersedes === undefined || body.supersedes === null ? null : asString(body.supersedes, 'supersedes', 64);
+  const result = await createFact(c.env.DB, device, input, Date.now(), supersedes);
   return c.json(result, result.deduped ? 200 : 201);
 });
 
@@ -190,7 +203,7 @@ app.post('/v1/import', async (c) => {
 app.get('/v1/stats', async (c) => {
   requireScope(c.get('device'), 'read');
   const project = validateProject(new URL(c.req.url).searchParams.get('project'));
-  return c.json({ project, facts: await countProject(c.env.DB, project) });
+  return c.json({ project, ...(await projectStats(c.env.DB, project)) });
 });
 
 app.notFound((c) => c.json({ error: { code: 'not_found', message: 'no such endpoint' } }, 404));

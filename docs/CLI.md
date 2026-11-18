@@ -47,8 +47,11 @@ loam add "offline note" --offline
 
 - `project` 默认：`LOAM_PROJECT` → git 根目录名 → cwd 目录名，非法字符转 `-`。
 - `kind`：`decision` `pitfall` `convention` `fact`（默认 `fact`）。
+- `--pin`：标为常驻，注入与复盘优先，`prune` 不删；建议每 project ≤8 条。
+- `--importance 1..5`：排序权重，默认 3（1 低、5 高）。
+- `--supersedes <id8>`：这条新事实取代旧事实。旧条目退出默认召回，`show` 仍可查看；服务端另有 `PATCH {supersededBy:null}` 可取消取代。
 - 幂等键：`sha256(project ␀ kind ␀ 规范化空白后的 text)`；重复写入输出 `= 已存在 <id8>`。
-- 网络失败或 5xx 自动落 `~/.loam/outbox.jsonl`；4xx 直接报错。
+- 网络失败或 5xx 自动落 `~/.loam/outbox.jsonl`；4xx 直接报错（含 `invalid_supersedes`）。
 - 单条 text ≤4 KB；tags ≤8；project ≤128 字符。
 
 ## search
@@ -61,8 +64,10 @@ loam search "x" --json --no-cache
 ```
 
 - 默认 5 条，硬上限 5；输出 ≤6 行（5 条 + 更多提示），每行 ≤100 字符。
+- 排序：`--sort rank`（默认，`★ 常驻 > importance > 时间`）或 `--sort recent`（纯时间倒序）。
+- 默认不返回被取代（superseded）的条目；跨历史查看用 Web 搜索或 `loam show`。
 - `q` 按空白拆词，最多 5 个词，词间 AND、每词子串匹配（`search "source truth"` 命中同时含两词的文本）。
-- 每行格式：`- [kind] text (harness · YYYY-MM-DD · id8)`。
+- 每行格式：`- [kind] ★? text (harness · YYYY-MM-DD · id8 · n/5?)`；`★` 表示常驻，`n/5` 仅重要度 ≠3 时出现。
 - 网络失败时读 `~/.loam/cache/search-*.json`，stderr 标注「离线：显示 N 分钟前的缓存」。
 - 每次 search 记录 `~/.loam/last-recall.json`，供 `loam doctor`。
 
@@ -92,7 +97,7 @@ loam export --all --out all.ndjson
 loam import facts.ndjson --project loam
 ```
 
-NDJSON 每行：`{project,kind,text,tags,harness,created_at}`；import 每批 200 条，服务端按 hash 去重。
+NDJSON 每行：`{project,kind,text,tags,harness,pinned,importance,created_at}`；import 每批 200 条，服务端按 hash 去重并接受 `pinned/importance`（`superseded_by` 不在导入范围内）。
 
 ## flush
 
@@ -111,7 +116,7 @@ loam prune --older 180d -y
 loam prune --all --older 90d
 ```
 
-软删除（`deleted_at`），不物理删除；`--yes` 供非交互环境。
+软删除（`deleted_at`），不物理删除；`pinned` 常驻条目不参与 prune；`--yes` 供非交互环境。
 
 ## install / uninstall / doctor / inject
 
@@ -122,6 +127,6 @@ loam doctor
 loam inject [--max 3] [--project P]
 ```
 
-- `inject` 供 hook 使用：输出 `<loam>…</loam>`，最多 3 条 × 60 字符，总计 ≤800 字符；无配置或网络失败时**静默且退出 0**。
+- `inject` 供 hook 使用：按 `sort=rank` 取前 N（常驻优先），输出 `<loam>…</loam>`，最多 3 条 × 60 字符，总计 ≤800 字符；无配置或网络失败时**静默且退出 0**。
 - `doctor` 逐项检查 config / token / repo 标记块 / install.json / 文件 / 最近 recall，失败项附修复命令。
 - 详见 [INSTALL.md](INSTALL.md)。

@@ -12,6 +12,10 @@ export interface Fact {
   deviceId: string;
   deviceName: string;
   createdAt: number;
+  pinned?: boolean;
+  importance?: number;
+  supersededBy?: string | null;
+  supersededAt?: number | null;
 }
 
 export interface FactInput {
@@ -20,6 +24,9 @@ export interface FactInput {
   text: string;
   tags: string[];
   harness: string;
+  pinned?: boolean;
+  importance?: number;
+  supersedes?: string;
 }
 
 export interface CreateResponse {
@@ -27,6 +34,7 @@ export interface CreateResponse {
   deduped: boolean;
   projectCount: number;
   warning: string | null;
+  supersededTarget?: { id: string };
 }
 
 export interface SearchResponse {

@@ -9,13 +9,14 @@ import {
   getFact,
   importFacts,
   listProjects,
+  projectStats,
   pruneFacts,
   searchFacts,
   updateFact,
 } from '../../src/facts.ts';
 import { ApiFailure } from '../../src/errors.ts';
 import type { Device } from '../../src/model.ts';
-import { parseDurationDays, parseSearchParams, validateFactInput } from '../../src/validate.ts';
+import { parseDurationDays, parseSearchParams, validateFactInput, validateFactPatch } from '../../src/validate.ts';
 import { allow, resetFallbackLimits } from '../../src/rate.ts';
 import { createTestDb } from './sqlite-shim.ts';
 
@@ -209,4 +210,153 @@ test('input limits are enforced', async () => {
   assert.equal(parseDurationDays('180d'), 180);
   assert.equal(parseDurationDays('12h'), 1);
   assert.throws(() => parseSearchParams(new URLSearchParams('limit=1')), /project is required/);
+});
+
+test('pinned and importance drive rank order, and rank rejects cursors', async () => {
+  const db = createTestDb();
+  const dev = device('dev-a');
+  const add = (text: string, extra: Record<string, unknown>, at: number) =>
+    createFact(db, dev, validateFactInput({ project: 'loam', text, ...extra }), at);
+  await add('pinned oldest', { pinned: true, importance: 1 }, 500);
+  await add('hot older', { importance: 5 }, 1_000);
+  await add('mid older', { importance: 3 }, 2_000);
+  await add('newest', {}, 4_000);
+
+  const ranked = await searchFacts(db, parseSearchParams(new URLSearchParams('project=loam&sort=rank')));
+  assert.deepEqual(
+    ranked.facts.map((fact) => fact.text),
+    ['pinned oldest', 'hot older', 'newest', 'mid older'],
+  );
+  assert.equal(ranked.next, null);
+
+  const recent = await searchFacts(db, parseSearchParams(new URLSearchParams('project=loam')));
+  assert.deepEqual(
+    recent.facts.map((fact) => fact.text),
+    ['newest', 'mid older', 'hot older', 'pinned oldest'],
+  );
+
+  assert.throws(
+    () => parseSearchParams(new URLSearchParams('project=loam&sort=rank&cursor=1_x')),
+    /cursor cannot be combined with sort=rank/,
+  );
+});
+
+test('supersede hides the old fact, is validated, and is released on delete', async () => {
+  const db = createTestDb();
+  const dev = device('dev-a');
+  const old = await createFact(
+    db,
+    dev,
+    validateFactInput({ project: 'loam', kind: 'decision', text: 'use Hono', pinned: true, importance: 5 }),
+    1_000,
+  );
+  const next = await createFact(
+    db,
+    dev,
+    validateFactInput({ project: 'loam', kind: 'decision', text: 'use Hono plus D1' }),
+    2_000,
+    old.fact.id,
+  );
+
+  assert.equal(next.fact.supersededBy, null);
+  const hidden = await getFact(db, old.fact.id);
+  assert.equal(hidden?.supersededBy, next.fact.id);
+  assert.equal(hidden?.pinned, false, 'a retired fact must not stay pinned');
+  assert.equal((await projectStats(db, 'loam')).pinned, 0);
+
+  const visible = await searchFacts(db, parseSearchParams(new URLSearchParams('project=loam')));
+  assert.deepEqual(visible.facts.map((fact) => fact.id), [next.fact.id]);
+
+  const history = await searchFacts(db, parseSearchParams(new URLSearchParams('project=loam&include_superseded=1')));
+  assert.equal(history.facts.length, 2);
+
+  await assert.rejects(
+    () => createFact(db, dev, validateFactInput({ project: 'loam', text: 'again' }), 3_000, old.fact.id),
+    (error: unknown) => error instanceof ApiFailure && /already superseded/.test(error.message),
+  );
+
+  const other = await createFact(db, dev, validateFactInput({ project: 'other', text: 'elsewhere' }), 4_000);
+  await assert.rejects(
+    () => createFact(db, dev, validateFactInput({ project: 'loam', text: 'cross project' }), 5_000, other.fact.id),
+    (error: unknown) => error instanceof ApiFailure && /another project/.test(error.message),
+  );
+  await assert.rejects(
+    () => createFact(db, dev, validateFactInput({ project: 'loam', text: 'missing' }), 6_000, 'ffffff'),
+    (error: unknown) => error instanceof ApiFailure && /not found/.test(error.message),
+  );
+
+  await deleteFact(db, next.fact.id, 7_000);
+  assert.equal((await getFact(db, old.fact.id))?.supersededBy, null);
+});
+
+test('prune skips pinned facts and revive keeps the memory shape', async () => {
+  const db = createTestDb();
+  const dev = device('dev-a');
+  const now = Date.now();
+  const pinned = await createFact(
+    db,
+    dev,
+    validateFactInput({ project: 'loam', text: 'keep me', pinned: true, importance: 5 }),
+    now - 300 * DAY,
+  );
+  await createFact(db, dev, validateFactInput({ project: 'loam', text: 'drop me' }), now - 300 * DAY);
+
+  assert.equal(await pruneFacts(db, { project: 'loam', olderThanDays: 180, now }), 1);
+  assert.notEqual(await getFact(db, pinned.fact.id), null);
+
+  await deleteFact(db, pinned.fact.id, now);
+  const revived = await createFact(
+    db,
+    dev,
+    validateFactInput({ project: 'loam', text: 'keep me', pinned: true, importance: 5 }),
+    now,
+  );
+  assert.equal(revived.fact.id, pinned.fact.id);
+  assert.equal(revived.fact.pinned, true);
+  assert.equal(revived.fact.importance, 5);
+});
+
+test('project stats, patch validation and import carry the memory shape', async () => {
+  const db = createTestDb();
+  const dev = device('dev-a');
+  const decision = await createFact(
+    db,
+    dev,
+    validateFactInput({ project: 'loam', kind: 'decision', text: 'a', pinned: true, importance: 4 }),
+    1_000,
+  );
+  await createFact(db, dev, validateFactInput({ project: 'loam', kind: 'pitfall', text: 'b' }), 2_000);
+  await createFact(db, dev, validateFactInput({ project: 'loam', kind: 'pitfall', text: 'c' }), 3_000, decision.fact.id);
+
+  const stats = await projectStats(db, 'loam');
+  assert.equal(stats.facts, 3);
+  assert.deepEqual(stats.byKind, { decision: 1, pitfall: 2, convention: 0, fact: 0 });
+  assert.deepEqual(stats.activeByKind, { decision: 0, pitfall: 2, convention: 0, fact: 0 });
+  assert.equal(stats.pinned, 0, 'the retired decision lost its pin');
+  assert.equal(stats.superseded, 1);
+
+  const patched = await updateFact(db, decision.fact.id, { pinned: false, importance: 2 });
+  assert.equal(patched.pinned, false);
+  assert.equal(patched.importance, 2);
+  assert.equal((await updateFact(db, decision.fact.id, { supersededBy: null })).supersededBy, null);
+
+  assert.throws(() => validateFactPatch({ importance: 6 }), /importance must be an integer/);
+  assert.throws(() => validateFactPatch({ pinned: 1 }), /pinned must be a boolean/);
+  assert.throws(
+    () => validateFactPatch({ supersededBy: 'abc' }),
+    (error: unknown) => error instanceof ApiFailure && error.code === 'unsupported_supersede',
+  );
+  assert.throws(() => validateFactPatch({}), /nothing to update/);
+
+  await importFacts(
+    db,
+    dev,
+    [{ project: 'loam', kind: 'convention', text: 'imported', pinned: true, importance: 5 }],
+    4_000,
+  );
+  const imported = (
+    await searchFacts(db, parseSearchParams(new URLSearchParams('project=loam&pinned=1&include_superseded=1')))
+  ).facts.find((fact) => fact.text === 'imported');
+  assert.equal(imported?.importance, 5);
+  assert.equal(imported?.pinned, true);
 });

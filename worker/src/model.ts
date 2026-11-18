@@ -4,9 +4,12 @@ export type FactKind = (typeof FACT_KINDS)[number];
 export const SCOPES = ['read', 'write'] as const;
 export type Scope = (typeof SCOPES)[number];
 
+export const SORT_MODES = ['recent', 'rank'] as const;
+export type SortMode = (typeof SORT_MODES)[number];
+
 export const VERSION = '0.1.0';
 
-/** Hard limits, asserted in code (PLAN §3.4). */
+/** Hard limits, asserted in code (SCOPE §量化边界). */
 export const MAX_TEXT_BYTES = 4096;
 export const MAX_PROJECT_LEN = 128;
 export const MAX_TAGS = 8;
@@ -19,6 +22,11 @@ export const IMPORT_BATCH = 200;
 export const LAST_SEEN_THROTTLE_MS = 5 * 60 * 1000;
 export const RATE_AUTH_PER_MIN = 10;
 export const RATE_API_PER_MIN = 60;
+
+/** Memory shape: importance 1..5, pinned is a soft cap per project. */
+export const DEFAULT_IMPORTANCE = 3;
+export const MAX_IMPORTANCE = 5;
+export const MAX_PINNED_HINT = 8;
 
 export interface Device {
   id: string;
@@ -44,6 +52,10 @@ export interface FactRow {
   hash: string;
   tags: string;
   harness: string;
+  pinned: number;
+  importance: number;
+  superseded_by: string | null;
+  superseded_at: number | null;
   device_id: string;
   device_name: string;
   created_at: number;
@@ -57,6 +69,10 @@ export interface Fact {
   text: string;
   tags: string[];
   harness: string;
+  pinned: boolean;
+  importance: number;
+  supersededBy: string | null;
+  supersededAt: number | null;
   deviceId: string;
   deviceName: string;
   createdAt: number;
@@ -70,6 +86,10 @@ export function toFact(row: FactRow): Fact {
     text: row.text,
     tags: row.tags ? row.tags.split(',') : [],
     harness: row.harness,
+    pinned: row.pinned === 1,
+    importance: row.importance ?? DEFAULT_IMPORTANCE,
+    supersededBy: row.superseded_by ?? null,
+    supersededAt: row.superseded_at ?? null,
     deviceId: row.device_id,
     deviceName: row.device_name,
     createdAt: row.created_at,
