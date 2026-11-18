@@ -1,15 +1,17 @@
 {
   "name": "@loam/worker",
   "private": true,
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "loam Cloudflare Worker: D1-backed project memory API.",
   "type": "module",
   "license": "Apache-2.0",
   "scripts": {
     "dev": "wrangler dev --local",
-    "deploy": "npm run db:init:remote && wrangler deploy",
+    "deploy": "npm run db:init:remote && npm run db:apply:remote && wrangler deploy",
     "db:init": "wrangler d1 execute loam --file=./schema.sql --local",
     "db:init:remote": "wrangler d1 execute DB --remote --file=./schema.sql -y",
+    "db:apply": "node ../scripts/apply-d1-migrations.mjs --local",
+    "db:apply:remote": "node ../scripts/apply-d1-migrations.mjs --remote",
     "test": "vitest run",
     "test:offline": "node --experimental-strip-types --test test/offline/core.test.ts test/offline/migrations.test.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
