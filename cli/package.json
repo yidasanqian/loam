@@ -40,5 +40,17 @@
   "devDependencies": {
     "@types/node": "^22.10.0",
     "typescript": "^5.7.0"
-  }
+  },
+  "keywords": [
+    "project-memory",
+    "agent-memory",
+    "claude-code",
+    "codex",
+    "dsh",
+    "ai-agents",
+    "cli",
+    "cloudflare-workers",
+    "d1",
+    "skills"
+  ]
 }
