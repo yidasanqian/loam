@@ -177,8 +177,8 @@ pnpm check:licenses              # 许可证白名单
 | M2 CLI MVP + outbox + 裁剪 | 完成；CLI 32/32 |
 | M2.5 installer + doctor + uninstall | 完成 |
 | M3 三端接线 / M4 双机验收 | 三端无头会话实测命中；第二台物理机未联调 |
-| M5 CI / license / 发布 | `0.1.0`、`0.1.1` 已发布；CI + 自动部署 + 迁移防回归通过 |
-| 记忆工作台 + 记忆形状（ADR-0006） | `0.1.1` 已发布；离线 17/17、HTTP 23/23、CLI 38/38 |
+| M5 CI / license / 发布 | `0.1.0`、`0.1.1`、`0.1.2` 已发布；CI + 自动部署 + 迁移防回归通过 |
+| 记忆工作台 + 记忆形状（ADR-0006） | `0.1.2` 已发布；离线 17/17、HTTP 23/23、CLI 38/38 |
 
 ## GitHub CI/CD
 
@@ -229,6 +229,8 @@ git tag v0.1.0 && git push --tags
 ```
 
 > 若 tag 发布在 `npm publish` 报 `404 Not Found - PUT https://registry.npmjs.org/@yidasanqian%2floam`，是 npm 侧 Trusted Publisher 未配置或与仓库 / workflow 不匹配，不是代码问题：先在 npm 包设置里配好 `release.yml`，再用新版本号重发。`0.1.1` 就是该情况下的手动 granular-token 发布（无 provenance）。
+>
+> 私有仓库不能带 provenance：`--provenance` 会报 `E422 … Unsupported GitHub Actions source repository visibility: "private"`。release workflow 已对 private 仓库自动去掉 provenance；仓库改为 public 后会自动带上。`0.1.2` 为本地 token 手动发布。
 
 `deploy` 用 `concurrency` 串行；`release` 依赖 npm provenance（`id-token: write`）。
 

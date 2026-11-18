@@ -6,7 +6,7 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 
 ### Changed
 
-- release workflow 在 `npm publish` 前打印 OIDC claims（`aud` / `repository` / `job_workflow_ref` / `ref` / `environment` 等），用于核对 Trusted Publisher 配置。0.1.1 为手动 granular-token 发布；0.1.2 起回到 OIDC + provenance。
+- release workflow 在 `npm publish` 前打印 OIDC claims（`aud` / `repository` / `job_workflow_ref` / `ref` / `environment` 等），用于核对 Trusted Publisher 配置。私有仓库带 `--provenance` 会被 npm 以 `E422` 拒绝，workflow 因此对 private 仓库改为不带 provenance、公开仓库自动带；0.1.2 为本地 granular-token 手动发布（无 provenance）。
 
 ## [0.1.1] - 2026-11-18
 

@@ -177,8 +177,8 @@ The 10-item manual UI checklist is in [docs/UI.md](docs/UI.md); `scripts/seed-de
 | M2 CLI MVP + outbox + output clipping | done; CLI 32/32 |
 | M2.5 installer + doctor + uninstall | done |
 | M3 three harnesses / M4 second machine | all three harnesses hit in headless sessions; second physical machine not tested |
-| M5 CI / license / publish | `0.1.0`, `0.1.1` published; CI, auto-deploy and migration guard green |
-| Workbench + memory shape (ADR-0006) | released in `0.1.1`; offline 17/17, HTTP 23/23, CLI 38/38 |
+| M5 CI / license / publish | `0.1.0`, `0.1.1`, `0.1.2` published; CI, auto-deploy and migration guard green |
+| Workbench + memory shape (ADR-0006) | released in `0.1.2`; offline 17/17, HTTP 23/23, CLI 38/38 |
 
 ## GitHub CI/CD
 
@@ -229,6 +229,8 @@ git tag v0.1.0 && git push --tags
 ```
 
 > If a tag release fails at `npm publish` with `404 Not Found - PUT https://registry.npmjs.org/@yidasanqian%2floam`, the npm-side Trusted Publisher is missing or does not match this repo/workflow; it is not a code problem. Configure `release.yml` under the package settings and publish a new version. `0.1.1` was published manually with a granular token (no provenance) for exactly this reason.
+>
+> A private repository cannot publish with provenance: `--provenance` fails with `E422 … Unsupported GitHub Actions source repository visibility: "private"`. The release workflow now drops provenance for private repositories and keeps it for public ones. `0.1.2` was published manually with the local token.
 
 `deploy` is serialized with `concurrency`; `release` relies on npm provenance (`id-token: write`).
 
