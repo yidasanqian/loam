@@ -2,7 +2,7 @@
 
 All notable changes to this project are documented here. Format: [Keep a Changelog](https://keepachangelog.com/), SemVer.
 
-## [Unreleased]
+## [0.1.1] - 2026-11-18
 
 ### Added
 
@@ -28,12 +28,6 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 ### Notes
 
 - 仍未做：MCP、服务端 LLM 抽取、向量检索、多用户 RBAC、快捷键映射、界面以外内容的翻译。
-
-## [0.1.1] - 2026-11-18
-
-### Changed
-
-- 版本仅用于验证 Trusted Publishing（OIDC）自动发布；0.1.0 已发布，npm 不允许覆盖同版本。
 
 ## [0.1.0] - 2026-11-17
 
