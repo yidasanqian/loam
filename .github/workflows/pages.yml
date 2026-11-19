@@ -47,6 +47,14 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
           pnpm run db:apply:remote
+      - name: Ensure Pages project
+        # 幂等：首次运行时项目还不存在，由这里在 CI 里创建；已存在时 wrangler 报错，忽略，
+        # 后续 Deploy Pages 仍然是对错的最终判据。
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          pnpm --filter @loam/worker exec wrangler pages project create loam --production-branch main || true
       - name: Deploy Pages
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
