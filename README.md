@@ -34,7 +34,7 @@ $ loam search "auth token"
 
 > 示例输出。召回默认 5 条、每行 ≤100 字符；注入给 harness 的只有前 3 条。
 
-**看界面**：[工作台](#记忆工作台) · **部署**：[一键](#方式-a一键部署) / [命令行](#方式-b命令行) · **文档**：[docs/](docs/)
+**看界面**：[工作台](#记忆工作台) · **部署**：[一键](#方式-a一键部署) / [命令行](#方式-b命令行) / [Pages](#方式-ccloudflare-pages) · **文档**：[docs/](docs/)
 
 ## 不是又一个 memory 工具
 
@@ -114,7 +114,19 @@ pnpm run deploy
 
 ### 方式 C：Cloudflare Pages
 
-同一份 Hono 应用跑在 Pages Functions 上，工作台与 API 同源挂在 `*.pages.dev`。
+[![Deploy to Cloudflare Pages](https://img.shields.io/badge/Deploy-Cloudflare_Pages-F6821F?style=for-the-badge)](https://dash.cloudflare.com/?to=/:account/workers-and-pages)
+
+Cloudflare 的 Deploy 按钮只支持 Workers 应用（[官方限制](https://developers.cloudflare.com/workers/platform/deploy-buttons/)），Pages 没有等价按钮，所以这个按钮直达 Workers & Pages 面板：`Create application → Pages → Connect to Git` 选这个仓库，按面板填三项即可。
+
+| 面板字段 | 值 |
+|---|---|
+| Root directory | `pages` |
+| Build command | `node ../scripts/build-pages.mjs` |
+| Build output directory | `public` |
+
+D1 绑定来自 `pages/wrangler.toml`（`DB`）；首次注册前在 Settings → Variables and Secrets 加 `ADMIN_TOKEN`，或跑 `wrangler pages secret put ADMIN_TOKEN`。
+
+也可以用命令行，同一份产物：
 
 ```bash
 pnpm dlx wrangler d1 create loam          # 已有 Worker 库则跳过，复用 database_id

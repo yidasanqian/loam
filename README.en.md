@@ -34,7 +34,7 @@ $ loam search "auth token"
 
 > Example output. Recall returns 5 facts by default, ≤100 chars each; only the first 3 are injected into the harness.
 
-**See it** [workbench](#memory-workbench) · **Deploy** [one-click](#option-a-one-click-deploy) / [CLI](#option-b-command-line) · **Docs** [docs/](docs/)
+**See it** [workbench](#memory-workbench) · **Deploy** [one-click](#option-a-one-click-deploy) / [CLI](#option-b-command-line) / [Pages](#option-c-cloudflare-pages) · **Docs** [docs/](docs/)
 
 ## Not another memory tool
 
@@ -114,7 +114,19 @@ For an existing 0.1 database run only the migration; backups, rollback and proxy
 
 ### Option C: Cloudflare Pages
 
-The same Hono app runs on Pages Functions, with the workbench and the API on one `*.pages.dev` origin.
+[![Deploy to Cloudflare Pages](https://img.shields.io/badge/Deploy-Cloudflare_Pages-F6821F?style=for-the-badge)](https://dash.cloudflare.com/?to=/:account/workers-and-pages)
+
+Cloudflare's Deploy button supports Workers applications only ([official limitation](https://developers.cloudflare.com/workers/platform/deploy-buttons/)), so this button opens the Workers & Pages dashboard: pick `Create application → Pages → Connect to Git`, choose this repository, and fill in the three fields below.
+
+| Dashboard field | Value |
+|---|---|
+| Root directory | `pages` |
+| Build command | `node ../scripts/build-pages.mjs` |
+| Build output directory | `public` |
+
+The `DB` binding comes from `pages/wrangler.toml`; add `ADMIN_TOKEN` under Settings → Variables and Secrets before the first activation, or run `wrangler pages secret put ADMIN_TOKEN`.
+
+Or do the same build from the command line:
 
 ```bash
 pnpm dlx wrangler d1 create loam          # skip if you already have the Worker database

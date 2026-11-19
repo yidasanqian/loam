@@ -56,6 +56,22 @@ pnpm dlx wrangler d1 execute loam --file=./migrations/0002-memory-shape.sql --re
 
 同一份 Hono 应用跑在 Pages Functions 上，工作台静态页由 Pages 同源托管。适合已经在用 Pages，或想让工作台和 API 挂在同一个 `*.pages.dev` / 自定义域名下的场景。
 
+### 面板：连接 Git（按钮直达）
+
+[![Deploy to Cloudflare Pages](https://img.shields.io/badge/Deploy-Cloudflare_Pages-F6821F?style=for-the-badge)](https://dash.cloudflare.com/?to=/:account/workers-and-pages)
+
+Cloudflare 的 Deploy 按钮只支持 Workers 应用（[官方限制](https://developers.cloudflare.com/workers/platform/deploy-buttons/)），Pages 没有等价按钮：上面的按钮直达 Workers & Pages 面板，走 `Create application → Pages → Connect to Git` 选本仓库，然后填三项。
+
+| 面板字段 | 值 | 原因 |
+|---|---|---|
+| Root directory | `pages` | `functions/` 与 `wrangler.toml` 都在 `pages/` 下，Pages 只认 Root directory 里的 Functions |
+| Build command | `node ../scripts/build-pages.mjs` | 脚本用 `import.meta.dirname` 定位仓库根，与执行目录无关（需 Node ≥20.11，默认构建镜像已满足） |
+| Build output directory | `public` | 与 `pages/wrangler.toml` 的 `pages_build_output_dir` 一致 |
+
+项目名保持 `loam`（或同步改 `pages/wrangler.toml` 的 `name`），否则 `wrangler pages deploy` 会指向另一个项目。`DB` 绑定由 `pages/wrangler.toml` 提供；首次注册前在 Settings → Variables and Secrets 加 `ADMIN_TOKEN`。
+
+### 命令行
+
 ```bash
 # 库：已有 Worker 库就跳过，直接复用同一个 database_id
 pnpm dlx wrangler d1 create loam
