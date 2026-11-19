@@ -42,13 +42,21 @@ function mergeEvidence(base: FactEvidence | null, extra: FactEvidence): FactEvid
   for (const symbol of extra.symbols) {
     if (!symbols.includes(symbol) && symbols.length < MAX_EVIDENCE_SYMBOLS) symbols.push(symbol);
   }
-  return {
+  const merged: FactEvidence = {
     paths,
     symbols,
     check: extra.check || base?.check || '',
     commit: extra.commit || base?.commit || '',
     at: Math.max(base?.at ?? 0, extra.at),
   };
+  const dirty = extra.dirty ?? base?.dirty;
+  if (dirty !== undefined) merged.dirty = dirty;
+  // A blob outlives its path only until the next merge: a path trimmed by the cap
+  // must not leave its hash behind as half an anchor.
+  const blobs = { ...(base?.blobs ?? {}), ...(extra.blobs ?? {}) };
+  const kept = Object.fromEntries(Object.entries(blobs).filter(([path]) => paths.includes(path)));
+  if (Object.keys(kept).length > 0) merged.blobs = kept;
+  return merged;
 }
 
 export function factHash(project: string, kind: FactKind, text: string): Promise<string> {

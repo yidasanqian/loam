@@ -106,6 +106,87 @@ test('evidence never enters the search envelope', () => {
   assert.ok(Array.from(line).length <= 100);
 });
 
+test('dirty evidence marks the captured commit as uncommitted', () => {
+  const evidence = {
+    paths: ['cli/src/format.ts'],
+    symbols: [],
+    check: '',
+    commit: 'abc1234def01',
+    dirty: true,
+    at: Date.UTC(2026, 10, 18),
+  };
+  const detail = formatDetail(fact({ evidence }), { exists: () => true });
+  assert.ok(detail.includes('@abc1234def01 (未提交)'));
+});
+
+test('clean evidence leaves the commit unmarked', () => {
+  const evidence = {
+    paths: ['cli/src/format.ts'],
+    symbols: [],
+    check: '',
+    commit: 'abc1234def01',
+    dirty: false,
+    at: Date.UTC(2026, 10, 18),
+  };
+  const detail = formatDetail(fact({ evidence }), { exists: () => true });
+  assert.ok(detail.includes('@abc1234def01'));
+  assert.ok(!detail.includes('未提交'));
+});
+
+test('a changed blob is reported as drift while the fact and pointers stay', () => {
+  const evidence = {
+    paths: ['cli/src/format.ts'],
+    symbols: [],
+    check: '',
+    commit: 'abc1234def01',
+    blobs: { 'cli/src/format.ts': 'a'.repeat(40) },
+    at: Date.UTC(2026, 10, 18),
+  };
+  const detail = formatDetail(fact({ evidence }), {
+    exists: () => true,
+    digest: () => ({ 'cli/src/format.ts': 'b'.repeat(40) }),
+  });
+  assert.ok(detail.includes('内容已改: cli/src/format.ts'));
+  assert.ok(detail.includes(base.text), 'drift must not drop the fact');
+  assert.ok(detail.includes('@abc1234def01'), 'drift must not drop the commit pointer');
+});
+
+test('missing digest hashes stay silent instead of inventing drift', () => {
+  const evidence = {
+    paths: ['cli/src/format.ts'],
+    symbols: [],
+    check: '',
+    commit: 'abc1234def01',
+    blobs: { 'cli/src/format.ts': 'a'.repeat(40) },
+    at: Date.UTC(2026, 10, 18),
+  };
+  const withoutDigest = formatDetail(fact({ evidence }), { exists: () => true });
+  assert.ok(!withoutDigest.includes('内容已改'));
+  assert.ok(withoutDigest.includes('@abc1234def01'));
+
+  const emptyDigest = formatDetail(fact({ evidence }), { exists: () => true, digest: () => ({}) });
+  assert.ok(!emptyDigest.includes('内容已改'));
+  assert.ok(emptyDigest.includes('@abc1234def01'));
+});
+
+test('a matching blob stays quiet', () => {
+  const hash = 'a'.repeat(40);
+  const evidence = {
+    paths: ['cli/src/format.ts'],
+    symbols: [],
+    check: '',
+    commit: 'abc1234def01',
+    blobs: { 'cli/src/format.ts': hash },
+    at: Date.UTC(2026, 10, 18),
+  };
+  const detail = formatDetail(fact({ evidence }), {
+    exists: () => true,
+    digest: () => ({ 'cli/src/format.ts': hash }),
+  });
+  assert.ok(!detail.includes('内容已改'));
+  assert.ok(detail.includes('@abc1234def01'));
+});
+
 test('a fact without evidence says nothing about it', () => {
   assert.ok(!formatDetail(fact()).includes('evidence:'));
 });

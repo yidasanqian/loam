@@ -9,6 +9,7 @@ import { Client, activate, requireEvidenceSupport, type CreateResponse, type Dev
 import { configPath, readConfig, requireConfig, resolveConfig, writeConfig, writeLastRecall } from './config.ts';
 import { CliError, OfflineError } from './errors.ts';
 import { formatDetail, formatFacts, oneLine, shortId } from './format.ts';
+import { detectGit, hashPaths } from './git.ts';
 import { doctorChecks } from './install/doctor.ts';
 import { install, readInstallRecord, uninstall } from './install/index.ts';
 import { appendOutbox, flushOutbox, readOutbox } from './outbox.ts';
@@ -103,24 +104,18 @@ function parseCsv(raw?: string): string[] {
 }
 
 /** Captured, not asked for: the anchor is only useful if it matches the code state. */
-function detectCommit(): string {
-  try {
-    const result = spawnSync('git', ['rev-parse', '--short=12', 'HEAD'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
-    const sha = (result.stdout ?? '').trim().toLowerCase();
-    return /^[0-9a-f]{7,40}$/u.test(sha) ? sha : '';
-  } catch {
-    return '';
-  }
-}
-
 function collectEvidence(paths?: string, symbols?: string, check?: string): FactEvidence | null {
+  const evidencePaths = parseCsv(paths);
+  const anchor = detectGit(evidencePaths);
   const evidence: FactEvidence = {
-    paths: parseCsv(paths),
+    paths: evidencePaths,
     symbols: parseCsv(symbols),
     check: (check ?? '').trim(),
-    commit: detectCommit(),
+    commit: anchor.commit,
     at: Date.now(),
   };
+  if (anchor.commit && anchor.dirty !== undefined) evidence.dirty = anchor.dirty;
+  if (anchor.blobs && Object.keys(anchor.blobs).length > 0) evidence.blobs = anchor.blobs;
   if (evidence.paths.length === 0 && evidence.symbols.length === 0 && !evidence.check && !evidence.commit) return null;
   return evidence;
 }
@@ -322,7 +317,7 @@ program
     run(async () => {
       const config = requireConfig();
       const payload = await new Client(config).request<{ fact: Fact }>('GET', `/v1/facts/${encodeURIComponent(id)}`);
-      console.log(options.json ? JSON.stringify(payload.fact) : formatDetail(payload.fact));
+      console.log(options.json ? JSON.stringify(payload.fact) : formatDetail(payload.fact, { digest: hashPaths }));
     }),
   );
 

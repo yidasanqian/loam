@@ -14,6 +14,7 @@ import {
   MAX_TAG_LEN,
   MAX_TAGS,
   MAX_TEXT_BYTES,
+  isPlainObject,
   type FactEvidence,
   type FactKind,
   type SortMode,
@@ -191,6 +192,30 @@ export function validateEvidence(value: unknown): FactEvidence | null {
     if (!COMMIT_RE.test(raw)) throw new ApiFailure(400, 'invalid_field', 'commit must be 7-40 hex characters');
     commit = raw;
   }
+  let dirty: boolean | undefined;
+  if (obj.dirty !== undefined && obj.dirty !== null && obj.dirty !== '') {
+    if (typeof obj.dirty !== 'boolean') throw new ApiFailure(400, 'invalid_field', 'dirty must be a boolean');
+    dirty = obj.dirty;
+  }
+  let blobs: Record<string, string> | undefined;
+  if (obj.blobs !== undefined && obj.blobs !== null) {
+    if (!isPlainObject(obj.blobs)) throw new ApiFailure(400, 'invalid_field', 'blobs must be an object');
+    const entries = Object.entries(obj.blobs);
+    if (entries.length > MAX_EVIDENCE_PATHS) {
+      throw new ApiFailure(400, 'invalid_field', `at most ${MAX_EVIDENCE_PATHS} blobs`);
+    }
+    // Same normalizer as `paths`: a `./` prefix is accepted there, so rejecting it
+    // here would make one pointer valid in one field and invalid in the other.
+    const kept = new Map<string, string>();
+    for (const [rawPath, value] of entries) {
+      const path = normalizeEvidencePath(rawPath, 'blobs');
+      if (!paths.includes(path)) throw new ApiFailure(400, 'invalid_field', 'blobs must reference paths');
+      const blob = typeof value === 'string' ? value.trim().toLowerCase() : '';
+      if (!COMMIT_RE.test(blob)) throw new ApiFailure(400, 'invalid_field', 'blob must be 7-40 hex characters');
+      kept.set(path, blob);
+    }
+    if (kept.size > 0) blobs = Object.fromEntries(kept);
+  }
   let at = 0;
   if (obj.at !== undefined && obj.at !== null && obj.at !== '') {
     if (typeof obj.at !== 'number' || !Number.isFinite(obj.at) || obj.at < 0) {
@@ -199,7 +224,11 @@ export function validateEvidence(value: unknown): FactEvidence | null {
     at = Math.floor(obj.at);
   }
   if (paths.length === 0 && symbols.length === 0 && !check && !commit) return null;
-  return { paths, symbols, check, commit, at };
+  const evidence: FactEvidence = { paths, symbols, check, commit, at };
+  // A dirty flag without a commit points at nothing a reader can re-check.
+  if (commit && dirty !== undefined) evidence.dirty = dirty;
+  if (blobs) evidence.blobs = blobs;
+  return evidence;
 }
 
 export function validateDeviceName(value: unknown): string {

@@ -47,6 +47,8 @@ export function formatFacts(facts: FactLine[], options: FormatFactsOptions = {})
 export interface DetailOptions {
   /** Injected so tests stay filesystem-free; production resolves against the cwd. */
   exists?: (path: string) => boolean;
+  /** Current blob hashes for drift comparison; production passes `hashPaths`. */
+  digest?: (paths: string[]) => Record<string, string>;
 }
 
 function defaultExists(path: string): boolean {
@@ -61,8 +63,13 @@ function defaultExists(path: string): boolean {
  * Evidence is a pointer set, so the only failure worth rendering is a dead one: a
  * path that no longer resolves would otherwise read as verified. The fact stays;
  * the pointers are dropped as a group and the reader is told to look again.
+ * Drift is the weaker signal: a changed file is reported, never dropped.
  */
-function formatEvidence(evidence: FactEvidence, exists: (path: string) => boolean): string {
+function formatEvidence(
+  evidence: FactEvidence,
+  exists: (path: string) => boolean,
+  digest?: (paths: string[]) => Record<string, string>,
+): string {
   const missing = evidence.paths.filter((path) => !exists(path));
   if (missing.length > 0) {
     return oneLine(`evidence: 已失效，找不到 ${missing.join(', ')}；事实保留，位置请重新定位`, MAX_LINE * 2);
@@ -71,10 +78,21 @@ function formatEvidence(evidence: FactEvidence, exists: (path: string) => boolea
   if (evidence.paths.length) parts.push(evidence.paths.join(', '));
   if (evidence.symbols.length) parts.push(evidence.symbols.join(', '));
   if (evidence.check) parts.push(`check: ${evidence.check}`);
-  if (evidence.commit) parts.push(`@${evidence.commit}`);
+  if (evidence.commit) parts.push(`@${evidence.commit}${evidence.dirty === true ? ' (未提交)' : ''}`);
   if (parts.length === 0) return '';
+
+  const drift: string[] = [];
+  if (evidence.blobs && Object.keys(evidence.blobs).length > 0 && digest) {
+    const current = digest(Object.keys(evidence.blobs));
+    for (const [path, hash] of Object.entries(evidence.blobs)) {
+      const now = current[path];
+      if (typeof now === 'string' && now && now.toLowerCase() !== hash.toLowerCase()) drift.push(path);
+    }
+  }
+
   const at = evidence.at ? ` · ${new Date(evidence.at).toISOString().slice(0, 10)}` : '';
-  return oneLine(`evidence: ${parts.join(' · ')}${at}`, MAX_LINE * 2);
+  const line = `evidence: ${parts.join(' · ')}${at}${drift.length ? ` · 内容已改: ${drift.join(', ')}` : ''}`;
+  return oneLine(line, MAX_LINE * 2);
 }
 
 export function formatDetail(fact: Fact, options: DetailOptions = {}): string {
@@ -87,7 +105,7 @@ export function formatDetail(fact: Fact, options: DetailOptions = {}): string {
     fact.text,
     fact.tags.length ? `tags: ${fact.tags.join(', ')}` : '',
     `from ${fact.harness} on ${fact.deviceName || 'unknown device'} at ${new Date(fact.createdAt).toISOString()}`,
-    fact.evidence ? formatEvidence(fact.evidence, options.exists ?? defaultExists) : '',
+    fact.evidence ? formatEvidence(fact.evidence, options.exists ?? defaultExists, options.digest) : '',
   ];
   return lines.filter(Boolean).join('\n');
 }

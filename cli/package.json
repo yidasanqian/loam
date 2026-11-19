@@ -29,7 +29,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "node --experimental-strip-types --test test/node/blocks.test.ts test/node/format.test.ts test/node/outbox.test.ts test/node/project.test.ts test/node/install.test.ts test/node/client.test.ts test/node/upgrade.test.ts",
+    "test": "node --experimental-strip-types --test test/node/blocks.test.ts test/node/format.test.ts test/node/git.test.ts test/node/outbox.test.ts test/node/project.test.ts test/node/install.test.ts test/node/client.test.ts test/node/upgrade.test.ts",
     "prepack": "pnpm build"
   },
   "dependencies": {

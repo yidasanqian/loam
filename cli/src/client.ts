@@ -8,6 +8,10 @@ export interface FactEvidence {
   symbols: string[];
   check: string;
   commit: string;
+  /** Working tree had uncommitted changes when captured; absent means unknown. */
+  dirty?: boolean;
+  /** path -> git blob hash; keys are a subset of `paths`. */
+  blobs?: Record<string, string>;
   at: number;
 }
 

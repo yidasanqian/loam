@@ -48,7 +48,16 @@ export interface FactEvidence {
   symbols: string[];
   check: string;
   commit: string;
+  /** Worktree state at capture time; absent on rows that never captured it. Only meaningful with a commit. */
+  dirty?: boolean;
+  /** path -> git blob hash of the captured content; keys are a subset of `paths`. */
+  blobs?: Record<string, string>;
   at: number;
+}
+
+/** JSON objects only: an array or null is not a keyed map. */
+export function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 export interface Device {
@@ -128,13 +137,20 @@ export function parseEvidence(raw: string | null | undefined): FactEvidence | nu
   try {
     const parsed = JSON.parse(raw) as Partial<FactEvidence>;
     if (!parsed || typeof parsed !== 'object') return null;
-    return {
+    const evidence: FactEvidence = {
       paths: Array.isArray(parsed.paths) ? parsed.paths : [],
       symbols: Array.isArray(parsed.symbols) ? parsed.symbols : [],
       check: typeof parsed.check === 'string' ? parsed.check : '',
       commit: typeof parsed.commit === 'string' ? parsed.commit : '',
       at: typeof parsed.at === 'number' ? parsed.at : 0,
     };
+    // An optional anchor is kept only when it is well formed; no cross-field re-check,
+    // so rows written before these fields existed still read as evidence.
+    if (typeof parsed.dirty === 'boolean') evidence.dirty = parsed.dirty;
+    if (isPlainObject(parsed.blobs) && Object.values(parsed.blobs).every((value) => typeof value === 'string')) {
+      evidence.blobs = Object.fromEntries(Object.entries(parsed.blobs)) as Record<string, string>;
+    }
+    return evidence;
   } catch {
     return null;
   }
