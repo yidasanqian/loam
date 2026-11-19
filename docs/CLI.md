@@ -55,7 +55,7 @@ loam add "行宽上限 100 字符" -k convention --path cli/src/format.ts --symb
 - `--symbol <name>`：证据符号名，`Class.method` 也可；改名后仍能 grep 定位，比行号稳（上限 8）。
 - `--check "<cmd>"`：能重跑这条结论的命令，唯一能把「相信」换成「重算」的证据。
 - 证据相关命令要求 worker ≥ 0.3.0：CLI 会先读 `GET /v1/me` 的 `version`，旧 worker 直接报 `worker_too_old` 并退出——旧 worker 会忽略未知字段与未知查询参数，静默丢证据、`--file` 返回未过滤结果，比报错难查得多。
-- 证据缺省自动带 `commit`（`git rev-parse --short=12 HEAD`）与写入时点。**搜索/列表行不带证据**（守 5 条 × 100 字符预算），只有 `loam show` 打印；`show` 时路径失效则整组证据被丢弃并提示重新定位，事实本身保留。
+- 证据缺省自动记录 git 锚点，无需手填：`HEAD`（12 位）、工作树是否脏（含未跟踪文件，尊重 .gitignore）、每条存在路径的 blob hash。脏树时 `commit` 只是捕获时的 HEAD，不能当作回溯地址（未提交的改动不在其中）。`loam show` 出现「内容已改」表示文件在事实写入后变过；漂移只提示，事实与指针都保留。**搜索/列表行不带证据**（守 5 条 × 100 字符预算），只有 `loam show` 打印；`show` 时路径失效则整组证据被丢弃并提示重新定位，事实本身保留。
 - 幂等键：`sha256(project ␀ kind ␀ 规范化空白后的 text)`；重复写入输出 `= 已存在 <id8>`。
 - 网络失败或 5xx 自动落 `~/.loam/outbox.jsonl`；4xx 直接报错（含 `invalid_supersedes`）。
 - 单条 text ≤4 KB；tags ≤8；project ≤128 字符。
