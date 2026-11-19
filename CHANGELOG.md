@@ -4,9 +4,17 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-19
+
 ### Added
 
+- 证据补 git 锚点：写入时除 `commit` 外记录 `dirty`（工作树是否有未提交改动，缺省=未知，不猜）与每条存在路径的 blob 哈希（`git hash-object --path`）。脏树时 `commit` 只是捕获时的 HEAD、不能当回溯地址，`loam show` 用 `(未提交)` 标出；blob 让「文件还是当初那份」可判。
 - Cloudflare Pages 部署方式：`pages/` 用 Pages Functions 承载同一份 Hono app（D1 共用），静态工作台由 Pages 同源托管；`pnpm pages:deploy` 先生成 `pages/public`（含 `_routes.json`）再上传。Pages 没有 `ratelimits` 绑定，限流退化为单 isolate 内存版。
+
+### Changed
+
+- `loam show` 对写入后内容变过的文件追加 `内容已改: <paths>`；漂移只提示，事实与指针都保留，与「路径失效整组丢弃」互不影响。搜索行仍然不带证据。
+- 服务端 `blobs` 的键走与 `paths` 相同的归一化（`./` 前缀两边一致），不在指针集合内的键 400；路径触顶被裁掉时孤儿 blob 同步丢弃。
 
 ## [0.3.1] - 2026-11-19
 
