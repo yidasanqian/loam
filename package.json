@@ -13,6 +13,7 @@
     "typecheck": "pnpm -r typecheck",
     "pages:build": "node scripts/build-pages.mjs",
     "pages:deploy": "node scripts/build-pages.mjs && pnpm --filter @loam/worker exec wrangler pages deploy --cwd ../pages --branch main",
+    "demo:build": "node scripts/build-demo.mjs",
     "check:licenses": "node scripts/check-licenses.mjs",
     "check:i18n": "node scripts/check-i18n.mjs",
     "check": "pnpm typecheck && pnpm test && pnpm check:licenses && pnpm check:i18n"

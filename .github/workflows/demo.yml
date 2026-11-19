@@ -1,0 +1,77 @@
+name: demo
+
+# 静态演示页（demo/）部署。没有 Functions、没有 D1、没有 token：
+# 服务的是假数据，配额消耗为零。触发条件以 push 为准，不接受本地直传。
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'demo/**'
+      - 'worker/public/**'
+      - 'scripts/build-demo.mjs'
+      - '.github/workflows/demo.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-demo
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    # 需要 CLOUDFLARE_API_TOKEN（Pages:Edit）与 CLOUDFLARE_ACCOUNT_ID，
+    # 以及一个名为 loam-demo 的 Pages 项目，然后：
+    #   gh variable set CF_DEMO --body true
+    if: vars.CF_DEMO == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Build demo output
+        run: node scripts/build-demo.mjs
+      - name: Guard demo isolation
+        # 三道锁在 CI 里断言，任何一条被改都会让流水线失败而不是悄悄打穿配额。
+        run: |
+          if [ -d demo/functions ]; then
+            echo "demo/functions 不允许存在：Pages 会把请求转进 Functions，隔离失效" >&2
+            exit 1
+          fi
+          if ! grep -q "connect-src 'none'" demo/_headers; then
+            echo "demo/_headers 缺少 connect-src 'none'" >&2
+            exit 1
+          fi
+          if grep -q "realFetch" demo/mock-api.js; then
+            echo "demo/mock-api.js 不得保留真实 fetch 通道" >&2
+            exit 1
+          fi
+      - name: Deploy demo
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: pnpm --filter @loam/worker exec wrangler pages deploy ../demo --project-name loam-demo --branch main
+      - name: Smoke test
+        env:
+          LOAM_DEMO_URL: ${{ vars.LOAM_DEMO_URL }}
+        run: |
+          if [ -z "$LOAM_DEMO_URL" ]; then
+            echo "LOAM_DEMO_URL is not set; skipping smoke test" >&2
+            exit 0
+          fi
+          csp=""
+          for i in $(seq 1 20); do
+            code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 "$LOAM_DEMO_URL/" || true)
+            csp=$(curl -sI --max-time 10 "$LOAM_DEMO_URL/" | grep -i '^content-security-policy:' || true)
+            if [ "$code" = "200" ] && [ -n "$csp" ]; then break; fi
+            sleep 3
+          done
+          echo "$csp"
+          echo "$csp" | grep -q "connect-src 'none'" || { echo "CSP 未下发 connect-src 'none'" >&2; exit 1; }

@@ -2,6 +2,13 @@ node_modules/
 dist/
 dist-artifacts/
 pages/public/
+# demo/ 里从 worker/public 生成、由 scripts/build-demo.mjs 重写的副本
+demo/app.js
+demo/i18n.js
+demo/overlays.js
+demo/views.js
+demo/styles.css
+demo/index.html
 .wrangler/
 .dev.vars
 .secrets/
