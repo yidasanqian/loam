@@ -1,5 +1,6 @@
 import type { Config } from './config.ts';
 import { CliError, OfflineError } from './errors.ts';
+import { compareVersions } from './upgrade.ts';
 import { VERSION } from './version.ts';
 
 export interface FactEvidence {
@@ -140,4 +141,32 @@ export async function activate(
     body: JSON.stringify({ name, scopes }),
   });
   return parseResponse(response);
+}
+
+/** First worker API version that stores evidence pointers and serves `?file=`. */
+export const MIN_EVIDENCE_API = '0.3.0';
+
+/**
+ * Older workers ignore an unknown `evidence` field and an unknown `file` query
+ * param, which reads as success while dropping the pointers or returning an
+ * unfiltered list. Capability therefore has to be checked, not assumed.
+ */
+export function workerSupportsEvidence(version: unknown): boolean {
+  return typeof version === 'string' && compareVersions(version, MIN_EVIDENCE_API) >= 0;
+}
+
+export interface CapabilityProbe {
+  readonly config: { server: string };
+  request<T>(method: string, path: string, body?: unknown): Promise<T>;
+}
+
+export async function requireEvidenceSupport(client: CapabilityProbe): Promise<void> {
+  const me = await client.request<{ version?: unknown }>('GET', '/v1/me');
+  if (workerSupportsEvidence(me.version)) return;
+  const reported = typeof me.version === 'string' ? me.version : '未知';
+  throw new CliError(
+    'worker_too_old',
+    `服务端 ${client.config.server} 的版本 ${reported} 不支持证据指针（需 ≥ ${MIN_EVIDENCE_API}）；先部署新 worker，或去掉 --path/--symbol/--check/--file`,
+    1,
+  );
 }

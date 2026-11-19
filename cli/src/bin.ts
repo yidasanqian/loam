@@ -5,13 +5,13 @@ import os from 'node:os';
 import { Command } from 'commander';
 import pc from 'picocolors';
 import { cacheAgeMinutes, readCache, writeCache } from './cache.ts';
-import { Client, activate, type CreateResponse, type DeviceSummary, type Fact, type FactEvidence, type SearchResponse } from './client.ts';
+import { Client, activate, requireEvidenceSupport, type CreateResponse, type DeviceSummary, type Fact, type FactEvidence, type SearchResponse } from './client.ts';
 import { configPath, readConfig, requireConfig, resolveConfig, writeConfig, writeLastRecall } from './config.ts';
 import { CliError, OfflineError } from './errors.ts';
 import { formatDetail, formatFacts, oneLine, shortId } from './format.ts';
 import { doctorChecks } from './install/doctor.ts';
 import { install, readInstallRecord, uninstall } from './install/index.ts';
-import { appendOutbox, flushOutbox } from './outbox.ts';
+import { appendOutbox, flushOutbox, readOutbox } from './outbox.ts';
 import { detectProject, sanitizeProject } from './project.ts';
 import { detectHarness, parseDurationDays, parseTags, promptLine, readStdin, writeFileAtomic } from './util.ts';
 import { PACKAGE_NAME, fetchLatestVersion, planUpgrade } from './upgrade.ts';
@@ -236,9 +236,11 @@ program
         queueFact(input);
         return;
       }
+      const client = new Client(config);
       let response: CreateResponse;
       try {
-        response = await new Client(config).request<CreateResponse>('POST', '/v1/facts', input);
+        if (evidence) await requireEvidenceSupport(client);
+        response = await client.request<CreateResponse>('POST', '/v1/facts', input);
       } catch (error) {
         if (!(error instanceof OfflineError)) throw error;
         queueFact(input);
@@ -287,10 +289,12 @@ program
       if (options.file) params.set('file', options.file);
 
       const cacheKey = params.toString();
+      const client = new Client(config);
       let payload: SearchResponse;
       let cached: number | null = null;
       try {
-        payload = await new Client(config).request<SearchResponse>('GET', `/v1/facts?${cacheKey}`);
+        if (options.file) await requireEvidenceSupport(client);
+        payload = await client.request<SearchResponse>('GET', `/v1/facts?${cacheKey}`);
         writeCache(cacheKey, payload);
       } catch (error) {
         if (!(error instanceof OfflineError) || options.cache === false) throw error;
@@ -505,6 +509,7 @@ program
     run(async () => {
       const config = requireConfig();
       const client = new Client(config);
+      if (readOutbox().some((entry) => entry.evidence)) await requireEvidenceSupport(client);
       const result = await flushOutbox(async (entry) => {
         await client.request<CreateResponse>('POST', '/v1/facts', {
           project: entry.project,

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import http from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { after, before, test } from 'node:test';
-import { Client, activate } from '../../src/client.ts';
+import { Client, activate, requireEvidenceSupport, workerSupportsEvidence } from '../../src/client.ts';
 import { CliError, OfflineError } from '../../src/errors.ts';
 
 let server: http.Server;
@@ -16,11 +16,14 @@ before(async () => {
       res.end(JSON.stringify(body));
     };
     if (url.pathname === '/v1/me') {
-      if (req.headers.authorization !== 'Bearer test-token') {
+      const token = req.headers.authorization;
+      if (token !== 'Bearer test-token' && token !== 'Bearer new-token') {
         json(401, { error: { code: 'unauthorized', message: 'invalid token' } });
         return;
       }
-      json(200, { device: { id: 'dev-1', name: 'win-desktop', scopes: ['read'] } });
+      // 0.3.0 reports its version; older workers answer without one.
+      const version = token === 'Bearer new-token' ? '0.3.0' : undefined;
+      json(200, { device: { id: 'dev-1', name: 'win-desktop', scopes: ['read'] }, ...(version ? { version } : {}) });
       return;
     }
     if (url.pathname === '/v1/activate') {
@@ -88,4 +91,25 @@ test('activate posts the admin token and returns the device token', async () => 
 test('a refused connection becomes OfflineError', async () => {
   const unreachable = new Client({ server: 'http://127.0.0.1:1', deviceId: 'x', deviceName: 'x', token: 'x' });
   await assert.rejects(() => unreachable.request('GET', '/v1/me'), OfflineError);
+});
+
+test('evidence support is decided by the version /v1/me reports', async () => {
+  assert.equal(workerSupportsEvidence('0.1.3'), false);
+  assert.equal(workerSupportsEvidence('0.3.0'), true);
+  assert.equal(workerSupportsEvidence('0.10.0'), true);
+  assert.equal(workerSupportsEvidence(undefined), false, 'an old worker answers without a version');
+  assert.equal(workerSupportsEvidence(''), false);
+  assert.equal(workerSupportsEvidence('not-a-version'), false);
+
+  await requireEvidenceSupport(client('new-token'));
+
+  await assert.rejects(
+    () => requireEvidenceSupport(client()),
+    (error: unknown) => error instanceof CliError && error.code === 'worker_too_old' && error.exitCode === 1,
+  );
+});
+
+test('the gate fails closed when the worker cannot be asked', async () => {
+  const unreachable = new Client({ server: 'http://127.0.0.1:1', deviceId: 'x', deviceName: 'x', token: 'x' });
+  await assert.rejects(() => requireEvidenceSupport(unreachable), OfflineError);
 });

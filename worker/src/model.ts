@@ -1,3 +1,5 @@
+import pkg from '../package.json' with { type: 'json' };
+
 export const FACT_KINDS = ['decision', 'pitfall', 'convention', 'fact'] as const;
 export type FactKind = (typeof FACT_KINDS)[number];
 
@@ -7,7 +9,8 @@ export type Scope = (typeof SCOPES)[number];
 export const SORT_MODES = ['recent', 'rank'] as const;
 export type SortMode = (typeof SORT_MODES)[number];
 
-export const VERSION = '0.1.3';
+/** Mirrors worker/package.json; /v1/me exposes it so clients can gate features. */
+export const VERSION = pkg.version;
 
 /** Hard limits, asserted in code (SCOPE §量化边界). */
 export const MAX_TEXT_BYTES = 4096;

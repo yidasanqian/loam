@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { beforeEach, test } from 'vitest';
+import pkg from '../../package.json';
 import { activate, addFact, call, resetDb } from './helpers.ts';
 
 beforeEach(resetDb);
@@ -151,4 +152,11 @@ test('evidence can be replaced and cleared by patch', async () => {
   });
   assert.equal(cleared.status, 200);
   assert.equal(((await cleared.json()) as CreatedBody).fact.evidence, null);
+});
+
+test('/v1/me reports the version clients gate evidence features on', async () => {
+  const a = await activate('win-desktop');
+  const body = (await (await call(a.token, '/v1/me')).json()) as { version: string };
+  assert.match(body.version, /^\d+\.\d+\.\d+$/);
+  assert.equal(body.version, pkg.version, 'worker VERSION must mirror worker/package.json');
 });
