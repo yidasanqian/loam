@@ -8,8 +8,12 @@
 [![license](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
 [![node](https://img.shields.io/node/v/@yidasanqian%2Floam)](package.json)
 
-**一份项目记忆，Claude Code / Codex / DSH 共用。**
-一行文本一条事实，注入约 200 token；不装 MCP、不跑向量库、不做自动转录。后端跑在 Cloudflare 免费层，也可以一键部署到你自己的账号。
+**每个新会话，你都要重新告诉 AI 这个项目的规矩。**
+
+loam 把规矩存成一行一条事实（决策 / 坑 / 约定 / 事实），写入时去重排序，开工前注入约 200 token。
+Claude Code、Codex、DSH 读同一份，换工具不丢；不装 MCP、不跑向量库、不做自动转录。后端跑在 Cloudflare 免费层，也可以一键部署到你自己的账号。
+
+**[点开工作台看效果 →](https://loam-demo.pages.dev)** — 假数据、零后端，页面不发任何请求。
 
 ```bash
 npx @yidasanqian/loam onboard --server https://loam.example.workers.dev --name 我的笔记本
@@ -34,7 +38,7 @@ $ loam search "auth token"
 
 > 示例输出。召回默认 5 条、每行 ≤100 字符；注入给 harness 的只有前 3 条。
 
-**看界面**：[工作台](#记忆工作台) · **部署**：[一键](#方式-a一键部署) / [命令行](#方式-b命令行) / [Pages](#方式-ccloudflare-pages) · **文档**：[docs/](docs/)
+**截图**：[工作台](#记忆工作台) · **部署**：[一键](#方式-a一键部署) / [命令行](#方式-b命令行) / [Pages](#方式-ccloudflare-pages) · **文档**：[docs/](docs/)
 
 ## 不是又一个 memory 工具
 

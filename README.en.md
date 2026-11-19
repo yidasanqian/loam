@@ -8,8 +8,12 @@
 [![license](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
 [![node](https://img.shields.io/node/v/@yidasanqian%2Floam)](package.json)
 
-**One project memory, shared by Claude Code / Codex / DSH.**
-One line per fact, about 200 tokens injected; no MCP, no vector store, no auto-transcription. The backend runs on Cloudflare's free tier, or deploy it to your own account in one click.
+**Every new session, you explain your project's rules again.**
+
+loam keeps those rules as one line per fact (decision / pitfall / convention / fact), deduped and ranked at write time, and injects ~200 tokens before a task.
+Claude Code, Codex and DSH read the same store, so switching tools loses nothing; no MCP, no vector store, no auto-transcription. The backend runs on Cloudflare's free tier, or deploy it to your own account in one click.
+
+**[Open the workbench →](https://loam-demo.pages.dev)** — fake data, no backend, the page sends no network requests.
 
 ```bash
 npx @yidasanqian/loam onboard --server https://loam.example.workers.dev --name my-laptop
@@ -34,7 +38,7 @@ $ loam search "auth token"
 
 > Example output. Recall returns 5 facts by default, ≤100 chars each; only the first 3 are injected into the harness.
 
-**See it** [workbench](#memory-workbench) · **Deploy** [one-click](#option-a-one-click-deploy) / [CLI](#option-b-command-line) / [Pages](#option-c-cloudflare-pages) · **Docs** [docs/](docs/)
+**Screenshots** [workbench](#memory-workbench) · **Deploy** [one-click](#option-a-one-click-deploy) / [CLI](#option-b-command-line) / [Pages](#option-c-cloudflare-pages) · **Docs** [docs/](docs/)
 
 ## Not another memory tool
 
