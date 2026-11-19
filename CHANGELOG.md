@@ -2,6 +2,20 @@
 
 All notable changes to this project are documented here. Format: [Keep a Changelog](https://keepachangelog.com/), SemVer.
 
+## [0.3.1] - 2026-11-19
+
+### Added
+
+- 证据门禁：`add --path/--symbol/--check`、`search --file`，以及带证据条目的 `flush`，都会先读 `GET /v1/me` 的 `version`；低于 0.3.0 直接报 `worker_too_old` 退出。旧 worker 会忽略未知字段与未知查询参数，表现是「写入成功但指针丢了」或「`--file` 返回未过滤列表」——静默错比报错难查得多。
+
+### Changed
+
+- worker 的 `VERSION` 改为从 `worker/package.json` 读取，`/health` 与 `/v1/me` 不再和发布号漂移（此前停在 0.1.3）。
+
+### Fixed
+
+- D1 拒绝 `JOIN pragma_table_info(m.name)`（`SQLITE_AUTH` 7500），第一次真实部署因此失败。schema 状态改为「一次 `sqlite_master` + 每张表一次 `pragma_table_info('t')`」，失败信息改为提取 API 的 `text` 说明，不再被截断。
+
 ## [0.3.0] - 2026-11-18
 
 ### Added
