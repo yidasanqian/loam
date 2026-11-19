@@ -4,6 +4,24 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-11-19
+
+### Added
+
+- `demo/` 静态工作台演示：每条事实写死在 `mock-api.js`，页面初始化即接管 `window.fetch`，`_headers` 的 `connect-src 'none'` 兜底，因此页面不发任何网络请求。独立 Pages 流水线（`demo.yml`），没有 Worker、没有 D1、没有 token，演示流量不消耗后端配额。
+- `scripts/metrics.mjs`：每周采集外部可见指标（GitHub 14 天流量、仓库热度、npm 版本与下载），输出 Markdown 表或 `--json`。自托管实例的活跃度只在用户自己的 D1 里，不采。
+- Pages 流水线首次部署前先创建 Pages 项目，不再因项目不存在直接失败。
+
+### Changed
+
+- `deploy.yml` 只在 worker 自身输入变化时重新部署，改 README 不再顺带重启 worker。
+- README（中英）首屏改为痛点开场并链接在线演示；删除 `docs/STATUS.md`，里程碑指向 CHANGELOG。
+- 工作台捕获条在窄屏不再溢出视口。
+
+### Notes
+
+- tag 发布除 npm 包外，现在同时创建 GitHub Release；正文中英双语，英文在上、中文在下。
+
 ## [0.4.0] - 2026-11-19
 
 ### Added

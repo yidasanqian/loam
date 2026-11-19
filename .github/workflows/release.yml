@@ -5,7 +5,7 @@ on:
     tags: ['v*']
 
 permissions:
-  contents: read
+  contents: write   # 创建 GitHub Release；npm 发布走 OIDC，不使用也不保存 token
   id-token: write
 
 jobs:
@@ -43,6 +43,9 @@ jobs:
       - run: pnpm -r test
       - run: pnpm --filter @loam/worker run test:offline
       - run: pnpm --filter @yidasanqian/loam build
+      # 先把双语正文落盘再发布：任一侧 changelog 缺段落就在 npm 发布之前失败。
+      - name: Release notes (English on top, Chinese below)
+        run: node scripts/release-notes.mjs "$GITHUB_REF_NAME" > release-notes.md
       # Trusted Publishing (OIDC): no token and no manual publish. The package is
       # configured at npmjs.com/package/@yidasanqian/loam/settings → Trusted Publisher
       # → GitHub Actions: yidasanqian/loam, workflow release.yml, environment empty.
@@ -54,4 +57,14 @@ jobs:
             npm publish --access public
           else
             npm publish --provenance --access public
+          fi
+      # 已存在则改写正文，让 workflow 重跑幂等（例如 npm 已发、release 建失败的上一轮）。
+      - name: GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release edit "$GITHUB_REF_NAME" --notes-file release-notes.md
+          else
+            gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes-file release-notes.md --verify-tag --latest
           fi

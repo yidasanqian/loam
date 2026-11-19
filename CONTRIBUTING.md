@@ -54,7 +54,8 @@ pnpm -r test
 - `push` / PR → `ci`：typecheck、Worker HTTP、CLI、offline、许可证、`wrangler deploy --dry-run`
 - `push main`（`worker/**`）→ `deploy`：D1 schema 校验 → `wrangler deploy` → `/health` 冒烟
 - `push main`（`worker/**`、`pages/**`）→ `pages`：构建 → Functions 打包 → 迁移 → `wrangler pages deploy` → `/health` 冒烟（`vars.CF_PAGES` 门控）
-- `tag v*` → `release`：全量测试 → `pnpm build` → `npm publish --provenance --access public`
+- `tag v*` → `release`：全量测试 → `pnpm build` → 生成双语 release notes → `npm publish --provenance --access public` → 创建/更新 GitHub Release
+- release 正文由 `scripts/release-notes.mjs` 拼装：英文在上（`CHANGELOG.en.md`），中文在下（`CHANGELOG.md`）。新版本必须在两份 changelog 都写同版本段落，缺一侧时 workflow 在 npm 发布之前失败
 
 仓库变量与 secrets（只设一次）：
 
