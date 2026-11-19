@@ -1064,12 +1064,30 @@ const ctx = {
   signOut,
 };
 
+/* ---------- version ---------- */
+
+/** `/health` is public and answered by both the Worker and Pages Functions. */
+async function loadVersion() {
+  const nodes = document.querySelectorAll('.app-version');
+  if (nodes.length === 0) return;
+  try {
+    const response = await fetch('/health', { headers: { accept: 'application/json' } });
+    if (!response.ok) return;
+    const data = await response.json();
+    if (typeof data?.version !== 'string' || !data.version) return;
+    for (const node of nodes) node.textContent = `v${data.version}`;
+  } catch {
+    /* offline or blocked: keep the placeholder */
+  }
+}
+
 /* ---------- boot ---------- */
 
 function init() {
   loadLanguage();
   applyTranslations();
   updateLangToggle();
+  void loadVersion();
   buildCaptureKinds();
   buildImportance();
   bind();
