@@ -88,11 +88,11 @@ Open your worker URL and paste the token from `~/.loamrc.json`:
 
 ![loam on mobile: one lane with horizontal snap and the capture dock](docs/images/loam-mobile.png)
 
-The page is served from Workers Assets (`worker/public/`) and calls `/v1/*` same-origin. No build step, no framework, no third-party frontend dependency.
+The page is served from Workers Assets (`worker/public/`) and calls `/v1/*` same-origin. No build step, no framework, no third-party frontend dependency. The same page can be hosted on Cloudflare Pages (see [option C](#option-c-cloudflare-pages)).
 
 ## Self-hosting
 
-Two methods; pick one. Full steps, limits and backups: [docs/DEPLOY.md](docs/DEPLOY.md).
+Three methods; pick one. Full steps, limits and backups: [docs/DEPLOY.md](docs/DEPLOY.md).
 
 ### Option A: one-click deploy
 
@@ -112,6 +112,19 @@ pnpm run deploy
 
 For an existing 0.1 database run only the migration; backups, rollback and proxy setup are in [docs/DEPLOY.md](docs/DEPLOY.md).
 
+### Option C: Cloudflare Pages
+
+The same Hono app runs on Pages Functions, with the workbench and the API on one `*.pages.dev` origin.
+
+```bash
+pnpm dlx wrangler d1 create loam          # skip if you already have the Worker database
+pnpm dlx wrangler pages project create loam --production-branch main
+pnpm dlx wrangler pages secret put ADMIN_TOKEN
+pnpm pages:deploy                          # rebuilds pages/public, then uploads
+```
+
+Pages has no `ratelimits` binding, so rate limiting degrades to the single-isolate in-memory fallback; schema, migrations and limits: [docs/DEPLOY.md](docs/DEPLOY.md).
+
 ## For developers
 
 ```bash
@@ -125,7 +138,7 @@ Architecture: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md); progress: [docs/STAT
 
 ## Docs
 
-- [docs/DEPLOY.md](docs/DEPLOY.md) two deploy paths, migrations, backups, proxy
+- [docs/DEPLOY.md](docs/DEPLOY.md) three deploy paths, migrations, backups, proxy
 - [docs/INSTALL.md](docs/INSTALL.md) harness wiring and rollback
 - [docs/CLI.md](docs/CLI.md) command reference
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) components, data flow, storage

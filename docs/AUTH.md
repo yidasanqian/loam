@@ -68,6 +68,7 @@ simple = { limit = 60, period = 60 }
 ```
 
 - 生产：绑定由平台执行，Worker 只读 `success`。
+- Cloudflare Pages 部署（[DEPLOY.md](DEPLOY.md) 方式 C）没有 `ratelimits` 绑定，等同下面的本地兜底，且按 isolate 计——限流强度以 token 撤销为准。
 - 本地 / 测试：binding 缺失时用进程内滑动窗口兜底（`worker/src/rate.ts`），同阈值，仅单 isolate 有效。
 - 实测：`wrangler deploy --dry-run` 与线上部署都识别 `RL_AUTH (10/60s)` 与 `RL_API (60/60s)`；本地 wrangler 4.162 的 miniflare 会对该字段告警并忽略，所以 `wrangler dev` / vitest 池走进程内兜底。
 - 线上实测：从同一出口经代理并发 80 次请求（同一设备 token）未出现 429。官方文档明确 limit 按**Cloudflare location** 计数且「Requests can exceed this threshold」（最终一致）；跨 colo 的突发无法稳定触发。**结论：限流是纵深防御，不是硬配额**；真正的边界是 per-device token 与撤销。

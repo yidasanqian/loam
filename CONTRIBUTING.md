@@ -53,6 +53,7 @@ pnpm -r test
 
 - `push` / PR → `ci`：typecheck、Worker HTTP、CLI、offline、许可证、`wrangler deploy --dry-run`
 - `push main`（`worker/**`）→ `deploy`：D1 schema 校验 → `wrangler deploy` → `/health` 冒烟
+- `push main`（`worker/**`、`pages/**`）→ `pages`：构建 → Functions 打包 → 迁移 → `wrangler pages deploy` → `/health` 冒烟（`vars.CF_PAGES` 门控）
 - `tag v*` → `release`：全量测试 → `pnpm build` → `npm publish --provenance --access public`
 
 仓库变量与 secrets（只设一次）：
@@ -60,8 +61,10 @@ pnpm -r test
 ```bash
 gh variable set CF_DEPLOY --body true
 gh variable set LOAM_URL --body "https://你的-worker.workers.dev"   # 冒烟测试地址，不写进仓库
+gh variable set CF_PAGES --body true                                # 启用 Pages 部署
+gh variable set LOAM_PAGES_URL --body "https://你的项目.pages.dev"   # Pages 冒烟测试地址，可留空
 gh secret set CLOUDFLARE_ACCOUNT_ID --body "..."
-gh secret set CLOUDFLARE_API_TOKEN      # Workers Scripts:Edit + D1:Edit
+gh secret set CLOUDFLARE_API_TOKEN      # Workers Scripts:Edit + D1:Edit (+ Pages:Edit)
 ```
 
 发布走 **Trusted Publishing（OIDC）**，不使用也不保存 `NPM_TOKEN`。npm 包设置里配置：

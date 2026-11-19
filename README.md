@@ -88,11 +88,11 @@ $ loam search "auth token"
 
 ![loam 移动端：单列横向 snap 与底部捕获](docs/images/loam-mobile.png)
 
-页面由 Workers Assets 托管（`worker/public/`），同源调用 `/v1/*`；无构建链、无框架、无第三方前端依赖。
+页面由 Workers Assets 托管（`worker/public/`），同源调用 `/v1/*`；无构建链、无框架、无第三方前端依赖。也可以把同一份页面托管到 Cloudflare Pages（见[方式 C](#方式-ccloudflare-pages)）。
 
 ## 自托管
 
-两种方式，任选其一。完整步骤、限制与备份见 [docs/DEPLOY.md](docs/DEPLOY.md)。
+三种方式，任选其一。完整步骤、限制与备份见 [docs/DEPLOY.md](docs/DEPLOY.md)。
 
 ### 方式 A：一键部署
 
@@ -112,6 +112,19 @@ pnpm run deploy
 
 已有 0.1 的库只跑迁移；备份、回滚与代理设置见 [docs/DEPLOY.md](docs/DEPLOY.md)。
 
+### 方式 C：Cloudflare Pages
+
+同一份 Hono 应用跑在 Pages Functions 上，工作台与 API 同源挂在 `*.pages.dev`。
+
+```bash
+pnpm dlx wrangler d1 create loam          # 已有 Worker 库则跳过，复用 database_id
+pnpm dlx wrangler pages project create loam --production-branch main
+pnpm dlx wrangler pages secret put ADMIN_TOKEN
+pnpm pages:deploy                          # 重建 pages/public 后上传
+```
+
+Pages 没有 `ratelimits` 绑定，限流退化为单 isolate 内存版；建库、迁移与限制见 [docs/DEPLOY.md](docs/DEPLOY.md)。
+
 ## 给开发者
 
 ```bash
@@ -125,7 +138,7 @@ pnpm check:licenses
 
 ## 文档
 
-- [docs/DEPLOY.md](docs/DEPLOY.md) 两种部署方式、迁移、备份、代理
+- [docs/DEPLOY.md](docs/DEPLOY.md) 三种部署方式、迁移、备份、代理
 - [docs/INSTALL.md](docs/INSTALL.md) 三端接线与回滚
 - [docs/CLI.md](docs/CLI.md) 命令参考
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) 组件、数据流、存储

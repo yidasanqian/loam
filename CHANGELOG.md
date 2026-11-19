@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented here. Format: [Keep a Changelog](https://keepachangelog.com/), SemVer.
 
+## [Unreleased]
+
+### Added
+
+- Cloudflare Pages 部署方式：`pages/` 用 Pages Functions 承载同一份 Hono app（D1 共用），静态工作台由 Pages 同源托管；`pnpm pages:deploy` 先生成 `pages/public`（含 `_routes.json`）再上传。Pages 没有 `ratelimits` 绑定，限流退化为单 isolate 内存版。
+
 ## [0.3.1] - 2026-11-19
 
 ### Added

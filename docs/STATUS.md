@@ -15,6 +15,7 @@
 | 记忆工作台 + 记忆形状（ADR-0006） | 完成 |
 | skill 改由 `npx skills` 接线 | 完成；本地路径与三端可见性已验证 |
 | Deploy to Cloudflare 一键部署 | 完成；按钮指向 `worker/`，部署脚本自动建表 |
+| Cloudflare Pages 部署（Functions + D1） | 本地生成 `pages/public` 与 Functions 打包已验证；线上部署与 `/health` 冒烟未验证 |
 
 ## 已发布
 

@@ -14,5 +14,5 @@
     "resolveJsonModule": true,
     "noEmit": true
   },
-  "include": ["src/**/*.ts", "test/http/**/*.ts", "vitest.config.ts"]
+  "include": ["src/**/*.ts", "test/http/**/*.ts", "../pages/functions/**/*.ts", "vitest.config.ts"]
 }
