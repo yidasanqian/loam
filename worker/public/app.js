@@ -33,7 +33,11 @@ const els = {
   projectFilter: $('#project-filter'),
   projectList: $('#project-list'),
   projectsEmpty: $('#projects-empty'),
-  projectOptions: $('#project-options'),
+  captureProjectButton: $('#capture-project-button'),
+  captureProjectLabel: $('#capture-project-label'),
+  captureProjectMenu: $('#capture-project-menu'),
+  captureProjectList: $('#capture-project-list'),
+  captureProjectEmpty: $('#capture-project-empty'),
   viewTabs: [...document.querySelectorAll('.view-tab')],
   searchOpen: $('#search-open'),
   langToggle: $('#lang-toggle'),
@@ -424,13 +428,36 @@ function renderProjects() {
   );
   els.projectsEmpty.hidden = state.projects.length > 0;
   els.projectName.textContent = state.project ?? '—';
-  els.projectOptions.replaceChildren(
+  els.captureProjectList.replaceChildren(
     ...state.projects.map((entry) => {
-      const option = document.createElement('option');
-      option.value = entry.project;
-      return option;
+      const item = templates.project.content.firstElementChild.cloneNode(true);
+      const button = item.querySelector('.project');
+      button.classList.toggle('is-active', entry.project === captureProject());
+      item.querySelector('.project-name').textContent = entry.project;
+      item.querySelector('.project-count').textContent = String(entry.facts);
+      button.addEventListener('click', () => chooseCaptureProject(entry.project));
+      return item;
     }),
   );
+  els.captureProjectEmpty.hidden = state.projects.length > 0;
+  renderCaptureProject();
+}
+
+/* 捕获条的项目选择：默认跟随当前项目，选了别的只影响下一条记录。 */
+function captureProject() {
+  return els.newProject.value.trim() || state.project || '';
+}
+
+function renderCaptureProject() {
+  els.captureProjectLabel.textContent = captureProject() || t('capture.project');
+  els.captureProjectButton.setAttribute('aria-expanded', String(!els.captureProjectMenu.hidden));
+}
+
+function chooseCaptureProject(project) {
+  els.newProject.value = project === state.project ? '' : project;
+  els.captureProjectMenu.hidden = true;
+  renderCaptureProject();
+  els.newText.focus();
 }
 
 function selectProject(project) {
@@ -787,7 +814,7 @@ async function addFact(event) {
   const project = defaultProject();
   if (!project) {
     toast(t('capture.projectRequired'), { error: true });
-    els.newProject.focus();
+    els.captureProjectButton.focus();
     return;
   }
   const body = {
@@ -879,7 +906,6 @@ async function exportNdjson() {
 
 function renderChrome() {
   els.projectName.textContent = state.project ?? '—';
-  els.newProject.placeholder = state.project ?? t('capture.project');
   els.projectButton.setAttribute('aria-expanded', String(!els.projectMenu.hidden));
   renderProjects();
 }
@@ -930,6 +956,17 @@ function bind() {
     if (event.target.closest('.project-switch')) return;
     els.projectMenu.hidden = true;
     els.projectButton.setAttribute('aria-expanded', 'false');
+  });
+
+  els.captureProjectButton.addEventListener('click', () => {
+    els.captureProjectMenu.hidden = !els.captureProjectMenu.hidden;
+    renderCaptureProject();
+  });
+  document.addEventListener('click', (event) => {
+    if (els.captureProjectMenu.hidden) return;
+    if (event.target.closest('.project-pick')) return;
+    els.captureProjectMenu.hidden = true;
+    renderCaptureProject();
   });
 
   els.searchOpen.addEventListener('click', () => openSearch(ctx));

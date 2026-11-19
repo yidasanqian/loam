@@ -24,6 +24,7 @@ const CSS_MARK = '/* ---- 静态演示标签';
 const DEMO_CSS = `
 ${CSS_MARK}（demo/mock-api.js 注入） ---- */
 .demo-strip {
+  flex: 0 0 auto;
   display: flex;
   flex-wrap: wrap;
   align-items: center;

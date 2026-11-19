@@ -263,8 +263,17 @@
         <div class="capture-row">
           <div id="new-kind-group" class="kind-picker" role="group" aria-label="kind"></div>
           <input id="new-tags" class="tags-input" data-i18n-placeholder="capture.tags" placeholder="标签，逗号分隔" autocomplete="off">
-          <input id="new-project" class="project-input mono" list="project-options" data-i18n-placeholder="capture.project" placeholder="project" autocomplete="off" spellcheck="false">
-          <datalist id="project-options"></datalist>
+          <div class="project-pick">
+            <button id="capture-project-button" class="project-chip mono" type="button" aria-haspopup="listbox" aria-expanded="false" aria-label="project">
+              <span id="capture-project-label">project</span>
+              <span class="caret" aria-hidden="true">▾</span>
+            </button>
+            <div id="capture-project-menu" class="capture-menu" hidden>
+              <ul id="capture-project-list" class="project-list" role="listbox" aria-label="projects"></ul>
+              <p id="capture-project-empty" class="menu-empty" data-i18n="topbar.noProject" hidden>还没有项目</p>
+            </div>
+          </div>
+          <input id="new-project" type="hidden" value="">
           <button id="add" class="btn primary" type="submit" data-i18n="capture.add">记录</button>
         </div>
       </form>
