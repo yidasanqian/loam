@@ -6,7 +6,7 @@
 [![npm downloads](https://img.shields.io/npm/dm/@yidasanqian%2Floam)](https://www.npmjs.com/package/@yidasanqian/loam)
 [![CI](https://github.com/yidasanqian/loam/actions/workflows/ci.yml/badge.svg)](https://github.com/yidasanqian/loam/actions/workflows/ci.yml)
 [![license](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
-[![node](https://img.shields.io/node/v/@yidasanqian%2Floam)](package.json)
+[![node](https://img.shields.io/node/v/@yidasanqian%2Floam)](cli/package.json)
 
 **每个新会话，你都要重新告诉 AI 这个项目的规矩。**
 
@@ -25,8 +25,8 @@ npx @yidasanqian/loam onboard --server https://loam.example.workers.dev --name �
 LOAM_ADMIN_TOKEN=... npx @yidasanqian/loam onboard --server https://loam.example.workers.dev --name 我的笔记本
 ```
 
-> `onboard` 自 0.2 起提供。npm 上还是 0.1.3 时，用 `loam install -y` + `loam login --server … --name …` 达到同样效果。
 > 还没有后端？先看下面的[一键部署](#方式-a一键部署)，再回来跑这行。
+> 重复跑同一行是安全的：已有 token 时 `onboard` 跳过登录，只刷新接线。
 
 ```text
 $ loam add "Bearer tokens are per-device" --kind decision --tags auth
@@ -62,14 +62,16 @@ $ loam search "auth token"
 
 ## 支持范围
 
-| harness | 调用约定 | skill | hook |
+| harness | 调用约定写入 | skill | hook |
 |---|---|---|---|
-| Claude Code | `~/.claude/CLAUDE.md` 标记块 | `npx skills add` 链接到 `~/.agents/skills` | 可选 `UserPromptSubmit` |
-| Codex | `~/.codex/AGENTS.md` 标记块 | 直接读 `~/.agents/skills` | — |
-| DSH | `~/.dsh/AGENTS.md` 标记块 | 直接读 `~/.agents/skills` | Cordis 插件（v1.1） |
-| 其它 Skills CLI agent | 手动引用 | `npx skills add yidasanqian/loam` | — |
+| Claude Code | `~/.claude/CLAUDE.md` 标记块 | `npx skills add`（agent `claude-code`）链接到 `~/.claude/skills/loam` | 可选：`onboard --with-hooks` 装 `UserPromptSubmit` |
+| Codex | `~/.codex/AGENTS.md` 标记块 | `npx skills add`（agent `codex`） | — |
+| DSH | `~/.dsh/AGENTS.md` 标记块 | 链接到 `~/.dsh/skills/loam`（Skills CLI 没有 DSH agent，由 loam 建链） | — |
+| 其它 Skills CLI agent | 手动引用 AGENTS.md 标记块 | `npx skills add yidasanqian/loam --skill loam --global` | — |
 
 仓库自己的 `AGENTS.md` 也会写入标记块，所以项目级约定跟着仓库走。
+
+DSH 的 Cordis 插件还只是计划（[PLAN.md](PLAN.md) 的 v1.1 项）。插件能给的两件事——写调用约定、建 skill 链接——`onboard` 已经覆盖，Claude Code 还能额外装 hook，所以不用等插件。
 
 ## 记忆工作台
 
@@ -94,6 +96,8 @@ $ loam search "auth token"
 
 页面由 Workers Assets 托管（`worker/public/`），同源调用 `/v1/*`；无构建链、无框架、无第三方前端依赖。也可以把同一份页面托管到 Cloudflare Pages（见[方式 C](#方式-ccloudflare-pages)）。
 
+`loam-demo.pages.dev` 是同一份界面的静态演示：假数据、零后端，页面里没有一条请求会发出去，用来在部署前先拖卡片、切视图看效果。
+
 ## 自托管
 
 三种方式，任选其一。完整步骤、限制与备份见 [docs/DEPLOY.md](docs/DEPLOY.md)。
@@ -102,7 +106,7 @@ $ loam search "auth token"
 
 [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/yidasanqian/loam/tree/main/worker)
 
-点按钮：Cloudflare 把 `worker/` 复制到你的 GitHub、创建 Worker 与 D1、提示填 `ADMIN_TOKEN`，然后按 `deploy` 脚本先建表再部署，并接上 Workers Builds。之后只需绑定域名（可选）并跑 `loam login`。
+点按钮：Cloudflare 把 `worker/` 复制到你的 GitHub、创建 Worker 与 D1、提示填 `ADMIN_TOKEN`，然后按 `deploy` 脚本先建表再部署，并接上 Workers Builds。之后只需绑定域名（可选），再按上面的 `onboard` 接线。
 
 ### 方式 B：命令行
 
@@ -114,7 +118,7 @@ pnpm dlx wrangler secret put ADMIN_TOKEN
 pnpm run deploy
 ```
 
-已有 0.1 的库只跑迁移；备份、回滚与代理设置见 [docs/DEPLOY.md](docs/DEPLOY.md)。
+已有库只跑迁移；备份、回滚与代理设置见 [docs/DEPLOY.md](docs/DEPLOY.md)。
 
 ### 方式 C：Cloudflare Pages
 
@@ -145,12 +149,11 @@ Pages 没有 `ratelimits` 绑定，限流退化为单 isolate 内存版；建库
 
 ```bash
 pnpm install
-pnpm typecheck && pnpm -r test
-pnpm check:licenses
+pnpm check        # typecheck + 单测 + license + i18n
 ```
 
 本地 worker / CLI 调试、代码约定、CI 与发布：[CONTRIBUTING.md](CONTRIBUTING.md)。
-架构见 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)，进度见 [docs/STATUS.md](docs/STATUS.md)。
+架构见 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)，版本变更见 [CHANGELOG.md](CHANGELOG.md)。
 
 ## 文档
 
@@ -158,10 +161,12 @@ pnpm check:licenses
 - [docs/INSTALL.md](docs/INSTALL.md) 三端接线与回滚
 - [docs/CLI.md](docs/CLI.md) 命令参考
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) 组件、数据流、存储
+- [docs/DEPENDENCIES.md](docs/DEPENDENCIES.md) 依赖与许可
 - [docs/UI.md](docs/UI.md) 工作台版式、原理图映射、手测清单
 - [docs/AUTH.md](docs/AUTH.md) 设备 token、撤销、限流
 - [docs/SCOPE.md](docs/SCOPE.md) 范围与量化边界
-- [docs/STATUS.md](docs/STATUS.md) 里程碑与已发布版本
+- [CHANGELOG.md](CHANGELOG.md) 版本与变更记录
+- [demo/](demo/) 静态演示页：假数据、零后端、CI 部署
 - [CONTRIBUTING.md](CONTRIBUTING.md) 开发、测试、CI 与发布
 - [SECURITY.md](SECURITY.md) 明文边界与报告方式
 
