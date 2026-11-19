@@ -5,7 +5,10 @@ on:
     branches: [main]
     paths:
       - 'worker/**'
-      - 'scripts/**'
+      # 只有这两支脚本进入部署步骤（D1 迁移与 schema 校验）；
+      # 其余 scripts 改动不该重新发布生产 worker。
+      - 'scripts/apply-d1-migrations.mjs'
+      - 'scripts/check-d1-schema.mjs'
       - '.github/workflows/deploy.yml'
   workflow_dispatch:
 
